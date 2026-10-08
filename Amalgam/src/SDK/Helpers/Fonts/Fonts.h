@@ -5,7 +5,8 @@
 enum EFonts
 {
 	FONT_ESP,
-	FONT_INDICATORS
+	FONT_INDICATORS,
+	FONT_WATERMARK
 };
 
 struct Font_t

@@ -33,8 +33,11 @@ public:
 	ImFont* FontBold = nullptr;
 	ImFont* FontLarge = nullptr;
 	ImFont* FontMono = nullptr;
+	ImFont* FontTitle = nullptr;
+	ImFont* FontSplash = nullptr;
 
 	ImFont* IconFont = nullptr;
+	ImFont* PhobiaIcon = nullptr;
 
 	bool m_bLoaded = false;
 };

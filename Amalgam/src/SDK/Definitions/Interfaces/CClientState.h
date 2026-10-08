@@ -97,6 +97,11 @@ public:
 	{
 		reinterpret_cast<void(*)(void*, const char*)>(S::CBaseClientState_SendStringCmd())(this, command);
 	}
+
+	void ForceFullUpdate()
+	{
+		m_nDeltaTick = -1;
+	}
 };
 
 MAKE_INTERFACE_SIGNATURE(CClientState, ClientState, "engine.dll", "48 8D 0D ? ? ? ? E8 ? ? ? ? F3 0F 5E 05", 0x0, 0);

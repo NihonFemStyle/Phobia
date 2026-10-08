@@ -52,7 +52,7 @@ void CVisuals::ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const
 		F::CameraWindow.m_bShouldDraw = false;
 	
 	if (bInterp
-		? !Vars::Visuals::Simulation::TrajectoryPath.Value && !Vars::Visuals::Simulation::ProjectileCamera.Value && !(Vars::Visuals::Simulation::SplashRadius.Value & Vars::Visuals::Simulation::SplashRadiusEnum::Enabled)
+		? !Vars::Visuals::Simulation::TrajectoryPath.Value && !Vars::Visuals::Simulation::ProjectileCamera.Value && !(Vars::Visuals::Simulation::SplashRadius.Value & Vars::Visuals::Simulation::SplashRadiusEnum::Enabled) && !Vars::Misc::MannVsMachine::TrailMarkers.Value
 		: !Vars::Visuals::Simulation::ShotPath.Value)
 		return;
 
@@ -184,6 +184,16 @@ void CVisuals::ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const
 
 				H::Draw.RenderWireframeBox(trace.endpos, -vSize, vSize, vAngles, Vars::Colors::TrajectoryPathIgnoreZ.Value);
 				H::Draw.RenderWireframeBox(trace.endpos, -vSize, vSize, vAngles, Vars::Colors::TrajectoryPath.Value, true);
+			}
+		}
+
+		if (Vars::Misc::MannVsMachine::TrailMarkers.Value)
+		{
+			const auto& fFont = H::Fonts.GetFont(FONT_ESP);
+			for (const auto& vPoint : tProjInfo.m_vPath)
+			{
+				if (Vec3 vScreen; SDK::W2S(vPoint, vScreen))
+					H::Draw.StringOutlined(fFont, vScreen.x, vScreen.y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_CENTER, "+");
 			}
 		}
 

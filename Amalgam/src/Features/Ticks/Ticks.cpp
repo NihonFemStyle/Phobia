@@ -1,5 +1,10 @@
 #include "Ticks.h"
 
+#include "../../SDK/Helpers/Draw/IndicatorPanel.h"
+#include "../../SDK/Helpers/Draw/OverlayFx.h"
+#include "../../SDK/Helpers/Draw/MemeSenseGfx.h"
+#include "../ImGui/Menu/FA6Icons.h"
+#include "../ImGui/Menu/Menu.h"
 #include "../PacketManip/AntiAim/AntiAim.h"
 #include "../EnginePrediction/EnginePrediction.h"
 #include "../Aimbot/AutoRocketJump/AutoRocketJump.h"
@@ -414,28 +419,102 @@ void CTicks::Draw(CTFPlayer* pLocal)
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 
+	int x = dtPos.x, y = dtPos.y + 2;
+
 	if (m_bSpeedhack)
-		return H::Draw.StringOutlined(fFont, dtPos.x, dtPos.y + 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, std::format("Speedhack x{}", Vars::Speedhack::Scale.Value).c_str());
-	
-	int iAntiAimTicks = F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0;
-	int iTicks = std::clamp(m_iShiftedTicks + std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0), 0, m_iMaxUsrCmdProcessTicks);
-	int iMax = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
-
-	float flRatio = float(iTicks) / float(iMax);
-	int iSizeX = H::Draw.Scale(100, Scale_Round), iSizeY = H::Draw.Scale(12, Scale_Round);
-	int iPosX = dtPos.x - iSizeX / 2, iPosY = dtPos.y + fFont.m_nTall + H::Draw.Scale(4) + 1;
-
-	H::Draw.StringOutlined(fFont, dtPos.x, dtPos.y + 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, std::format("Ticks {} / {}", iTicks, iMax).c_str());
-	if (m_iWait)
-		H::Draw.StringOutlined(fFont, dtPos.x, dtPos.y + fFont.m_nTall + H::Draw.Scale(18, Scale_Round) + 1, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, "Not Ready");
-
-	H::Draw.LineRoundRect(iPosX, iPosY, iSizeX, iSizeY, H::Draw.Scale(4, Scale_Round), Vars::Menu::Theme::Accent.Value, 16);
-	if (flRatio)
 	{
-		iSizeX -= H::Draw.Scale(2, Scale_Ceil) * 2, iSizeY -= H::Draw.Scale(2, Scale_Ceil) * 2;
-		iPosX += H::Draw.Scale(2, Scale_Round), iPosY += H::Draw.Scale(2, Scale_Round);
-		H::Draw.StartClipping(iPosX, iPosY, iSizeX * flRatio, iSizeY);
-		H::Draw.FillRoundRect(iPosX, iPosY, iSizeX, iSizeY, H::Draw.Scale(3, Scale_Round), Vars::Menu::Theme::Accent.Value, 16);
-		H::Draw.EndClipping();
+		IndicatorPanel p;
+		p.Reset(fFont, "Ticks", ALIGN_TOP, MS_ICON_FA_ANGLES_RIGHT);
+		p.Row(std::format("Speedhack x{}", Vars::Speedhack::Scale.Value).c_str(), MemeSenseGfx::White());
+		p.Draw(x, y);
+		F::Menu.DragOverlay(Vars::Menu::TicksDisplay, p.OriginX(x), y, p.Width(), p.Height());
+		return;
 	}
+
+	const Color_t tAccent = MemeSenseGfx::Accent();
+	const Color_t tWhite = MemeSenseGfx::White();
+	const Color_t tBlack = { 0, 0, 0, 255 };
+
+	const int iMax = std::max(m_iMaxShift, 1);
+	const int iCharge = std::clamp(m_iShiftedTicks, 0, m_iMaxShift);
+	const float flCharge = float(iCharge) / float(iMax);
+
+	static float flSmoothed = flCharge;
+	const float flSpeed = std::clamp(I::GlobalVars->frametime * 8.f, I::GlobalVars->interval_per_tick, 1.0f);
+	flSmoothed = std::clamp(flSmoothed + (flCharge - flSmoothed) * flSpeed, 0.f, 1.f);
+	if (fabsf(flSmoothed - flCharge) < 0.001f)
+		flSmoothed = flCharge;
+
+	Color_t tStatus = MemeSenseGfx::White();
+	std::string sStatus;
+	const bool bHardBlocked = !Vars::Doubletap::Doubletap.Value || m_iWait || F::AutoRocketJump.IsRunning();
+	if (m_bRecharge)
+		sStatus = "charging", tStatus = Vars::Colors::IndicatorTextMid.Value;
+	else if (iCharge >= std::min(Vars::Doubletap::TickLimit.Value, iMax))
+		sStatus = "ready", tStatus = Vars::Colors::IndicatorTextGood.Value;
+	else if (bHardBlocked)
+		sStatus = "not possible", tStatus = Vars::Colors::IndicatorTextBad.Value;
+	else
+		sStatus = "not ready", tStatus = MemeSenseGfx::ComboText();
+
+	// size the panel to its contents so the text never escapes the box
+	const std::string sCharge = std::format("{} / {} ({:.2f}s)", iCharge, iMax, iCharge * TICK_INTERVAL);
+	const int iIconSize = fFont.m_nTall;
+	const int iTextW = std::max(int(H::Draw.GetTextSize(sCharge.c_str(), fFont).x), int(H::Draw.GetTextSize(sStatus.c_str(), fFont).x));
+	const int iPadding = H::Draw.Scale(5, Scale_Round);
+	const int iWidth = iTextW + iIconSize + H::Draw.Scale(6, Scale_Round) + iPadding * 2;
+	const int iPosX = dtPos.x - iWidth / 2;
+	int iPosY = dtPos.y;
+
+	// eased reveal / rise for the whole panel (Vars::Menu::Overlay)
+	const uint32_t uPanelID = FNV1A::Hash32("Ticks DT");
+	float flAlpha = 1.f, flSlide = 1.f;
+	if (OverlayFx::Anim())
+		OverlayFx::Reveal(uPanelID, 0.f, flAlpha, flSlide);
+	if (flAlpha < 0.02f)
+		return;
+	iPosY += int((1.f - flSlide) * H::Draw.Scale(6, Scale_Round));
+
+	// layout: line0 = icon + charge text, line1 = status (own row), bar below it
+	const int iRowH = fFont.m_nTall + H::Draw.Scale(1, Scale_Round);
+	const int iTextTop = H::Draw.Scale(5, Scale_Round);
+	const int iLine0Y = iPosY + iTextTop;
+	const int iLine1Y = iLine0Y + iRowH;
+	const int iBarH = H::Draw.Scale(9, Scale_Round);
+	const int iBarY = iLine1Y + iRowH + H::Draw.Scale(2, Scale_Round);
+	const int iHeight = (iBarY + iBarH) - iPosY + H::Draw.Scale(4, Scale_Round);
+
+	// aero glass chrome: glow / gradient body / accent border / rail / ember baseline
+	OverlayFx::PanelSurface(iPosX, iPosY, iWidth, iHeight, tAccent, flAlpha);
+
+	// charge bar: black when empty, glow color ramps to accent at full charge
+	// (reverse glow: bright at the bar's outer edges, dim toward the core)
+	const int bar_x = iPosX + iPadding;
+	const int bar_y = iBarY;
+	const int bar_total = iWidth - iPadding * 2;
+	const int bar_h = iBarH;
+
+	H::Draw.FillRect(bar_x, bar_y, bar_total, bar_h, tBlack.Alpha((unsigned char)(220.f * flAlpha)));
+	const int bar_w = std::max(0, int(bar_total * flSmoothed));
+	if (bar_w > 0)
+	{
+		const Color_t tFill = tBlack.Lerp(tAccent, flSmoothed, LerpEnum::All).Alpha((unsigned char)(255.f * flAlpha));
+		const int hHalf = std::max(1, bar_h / 2);
+		H::Draw.GradientRect(bar_x, bar_y, bar_w, hHalf, tFill, tFill.Alpha((unsigned char)(64.f * flAlpha)), false);
+		H::Draw.GradientRect(bar_x, bar_y + bar_h - hHalf, bar_w, hHalf, tFill.Alpha((unsigned char)(64.f * flAlpha)), tFill, false);
+		const int hMid = bar_h - hHalf * 2;
+		if (hMid > 0)
+			H::Draw.FillRect(bar_x, bar_y + hHalf, bar_w, hMid, tFill.Alpha((unsigned char)(48.f * flAlpha)));
+		H::Draw.LineRect(bar_x, bar_y, bar_total, bar_h, tFill);
+	}
+
+	// double-chevron DT icon + charge text (line 0)
+	const int iTextX = iPosX + iPadding + iIconSize + H::Draw.Scale(6, Scale_Round);
+	SurfaceIcons::Draw(MS_ICON_FA_ANGLES_RIGHT, iPosX + iPadding, iLine0Y, iIconSize, tAccent.Alpha((unsigned char)(255.f * flAlpha)));
+	H::Draw.StringOutlined(fFont, iTextX, iLine0Y, tWhite.Alpha((unsigned char)(255.f * flAlpha)), tBlack.Alpha((unsigned char)(255.f * flAlpha)), ALIGN_TOPLEFT, sCharge.c_str());
+
+	// status on its own line above the bar, right-aligned like jvnkbin
+	H::Draw.StringOutlined(fFont, iPosX + iWidth - iPadding, iLine1Y, tStatus.Alpha((unsigned char)(tStatus.a * flAlpha)), tBlack.Alpha((unsigned char)(255.f * flAlpha)), ALIGN_TOPRIGHT, sStatus.c_str());
+
+	F::Menu.DragOverlay(Vars::Menu::TicksDisplay, iPosX, iPosY, iWidth, iHeight);
 }

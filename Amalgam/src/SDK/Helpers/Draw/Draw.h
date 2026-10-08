@@ -1,5 +1,6 @@
 #pragma once
 #include "../Fonts/Fonts.h"
+#include "Palette.h"
 #include "../../Definitions/Misc/ISurface.h"
 #include "../../Definitions/Definitions.h"
 #include "../../Vars.h"
@@ -93,6 +94,12 @@ public:
 	void FillRectPercent(int x, int y, int w, int h, float t, Color_t tColor, Color_t tColorOut = { 0, 0, 0, 255 }, EAlign eAlign = ALIGN_LEFT, bool bAdjust = false);
 	void FillRoundRect(int x, int y, int w, int h, int iRadius, Color_t tColor, int iCount = 64);
 	void LineRoundRect(int x, int y, int w, int h, int iRadius, Color_t tColor, int iCount = 64);
+
+	inline void Panel(int x, int y, int w, int h, int iRadius, Color_t tFill, Color_t tBorder)
+	{
+		FillRoundRect(x, y, w, h, iRadius, tFill);
+		LineRoundRect(x, y, w, h, iRadius, tBorder);
+	}
 
 	void FillCircle(int x, int y, float iRadius, int iSegments, Color_t tColor);
 	void LineCircle(int x, int y, float iRadius, int iSegments, Color_t tColor);

@@ -26,7 +26,6 @@ private:
 	void MenuSettings(int iTab = 0);
 	void MenuSearch(std::string sSearch);
 
-	void AddDraggable(const char* sLabel, ConfigVar<DragBox_t>& tVar, bool bShouldDraw = true, ImVec2 vSize = { H::Draw.Scale(100), H::Draw.Scale(40) });
 	void AddResizableDraggable(const char* sLabel, ConfigVar<WindowBox_t>& tVar, bool bShouldDraw = true, ImGuiSizeCallback fCustomCallback = nullptr, ImVec2 vMinSize = { H::Draw.Scale(100), H::Draw.Scale(100) }, ImVec2 vMaxSize = { H::Draw.Scale(1000), H::Draw.Scale(1000) });
 	void DrawBinds();
 
@@ -36,6 +35,8 @@ private:
 public:
 	void Render();
 	void AddOutput(const char* sFunction, const char* sLog, Color_t tColor = Vars::Menu::Theme::Accent.Value);
+	static void InvalidateImages();
+	bool DragOverlay(ConfigVar<DragBox_t>& tVar, int iX, int iY, int iW, int iH);
 
 	bool m_bIsOpen = false;
 	bool m_bInKeybind = false;

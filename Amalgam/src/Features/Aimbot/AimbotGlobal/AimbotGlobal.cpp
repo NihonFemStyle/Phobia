@@ -12,6 +12,21 @@ std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTar
 	SortTargetsPre(vTargets, iMethod);
 	vTargets.resize(std::min(size_t(iMaxTargets), vTargets.size()));
 	SortTargetsPost(vTargets, iMethod);
+
+	if (Vars::Aimbot::General::TargetLock.Value && G::AimTarget.m_iEntIndex
+		&& I::GlobalVars->tickcount - G::AimTarget.m_iTickCount <= G::AimTarget.m_iDuration)
+	{
+		auto it = std::find_if(vTargets.begin(), vTargets.end(), [&](const Target_t& t)
+		{
+			return t.m_pEntity && t.m_pEntity->entindex() == G::AimTarget.m_iEntIndex;
+		});
+		if (it != vTargets.end())
+		{
+			Target_t tLocked = std::move(*it);
+			vTargets.erase(it);
+			vTargets.insert(vTargets.begin(), std::move(tLocked));
+		}
+	}
 	return vTargets;
 }
 

@@ -23,6 +23,9 @@ public:
 	bool m_bRan = false;
 	bool m_bRunningSecondary = false;
 
+	int m_iSoftAimEnt = 0;
+	bool m_bSoftAimEngaged = false;
+
 	std::unordered_map<int, RealPath_t> m_mRealPaths = {};
 };
 

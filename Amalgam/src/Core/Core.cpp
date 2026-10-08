@@ -1,4 +1,4 @@
-#include "Core.h"
+﻿#include "Core.h"
 
 #include "../SDK/SDK.h"
 #include "../BytePatches/BytePatches.h"
@@ -8,6 +8,10 @@
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Spectate/Spectate.h"
+#include "../Features/Players/Bans.h"
+#include "../Features/Players/Music.h"
+#include "../Features/Radio/Radio.h"
+#include "../Features/Discord/DiscordRPC.h"
 #include "../SDK/Events/Events.h"
 #include <Psapi.h>
 
@@ -33,14 +37,14 @@ static inline bool CheckDXLevel()
 	if (mat_dxlevel->GetInt() < 90)
 	{
 		/*
-		const char* sMessage = "You are running with graphics options that Amalgam does not support. -dxlevel must be at least 90.";
+		const char* sMessage = "You are running with graphics options that Phobia does not support. -dxlevel must be at least 90.";
 		U::Core.AppendFailText(sMessage);
-		SDK::Output("Amalgam", sMessage, ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_MENU | OUTPUT_DEBUG);
+		SDK::Output("Phobia", sMessage, ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_MENU | OUTPUT_DEBUG);
 		return false;
 		*/
 
-		const char* sMessage = "You are running with graphics options that Amalgam does not support. It is recommended for -dxlevel to be at least 90.";
-		SDK::Output("Amalgam", sMessage, WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_WARNING);
+		const char* sMessage = "You are running with graphics options that Phobia does not support. It is recommended for -dxlevel to be at least 90.";
+		SDK::Output("Phobia", sMessage, WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_WARNING);
 	}
 
 	return true;
@@ -70,7 +74,7 @@ void CCore::LogFailText()
 
 		m_ssFailStream << "\n";
 		m_ssFailStream << "Ctrl + C to copy. \n";
-		m_ssFailStream << "Logged to Amalgam\\fail_log.txt. ";
+		m_ssFailStream << "Logged to Phobia\\fail_log.txt. ";
 	}
 	catch (...) {}
 
@@ -115,8 +119,12 @@ void CCore::Load()
 	F::Materials.LoadMaterials();
 	H::Fonts.Reload();
 	F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
+	F::SteamBans.LoadLists();
+	F::Music.Start();
+	F::Radio.StartupRadio();
+	F::DiscordRPC.Start();
 
-	SDK::Output("Amalgam", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+	SDK::Output("Phobia", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 }
 
 void CCore::Loop()
@@ -143,6 +151,9 @@ void CCore::Unload()
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
 	U::BytePatches.Unload();
 	H::Events.Unload();
+	F::SteamBans.Unload();
+	F::Music.Unload();
+	F::DiscordRPC.Unload();
 
 	if (F::Menu.m_bIsOpen)
 		I::MatSystemSurface->SetCursorAlwaysVisible(false);
@@ -174,5 +185,5 @@ void CCore::Unload()
 		return;
 	}
 
-	SDK::Output("Amalgam", "Unloaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+	SDK::Output("Phobia", "Unloaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 }

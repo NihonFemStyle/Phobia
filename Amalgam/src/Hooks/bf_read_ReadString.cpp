@@ -1,5 +1,6 @@
 #include "../SDK/SDK.h"
 
+#include "../Features/ChatUtils/ChatUtils.h"
 #include "../Features/Players/PlayerUtils.h"
 
 MAKE_SIGNATURE(bf_read_ReadString, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 41 56 40 32 FF", 0x0);
@@ -21,6 +22,8 @@ MAKE_HOOK(bf_read_ReadString, S::bf_read_ReadString(), bool,
 		const int iOriginalBit = pMsg->m_iCurBit;
 		const int iTarget = pMsg->ReadByte() >> 1;
 		pMsg->Seek(iOriginalBit);
+
+		F::ChatUtils.OnVoteStart(pMsg);
 
 		if (!iTarget)
 			return bReturn;

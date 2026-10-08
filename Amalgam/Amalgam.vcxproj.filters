@@ -6,6 +6,7 @@
     <ClCompile Include="src\Features\Binds\Binds.cpp" />
     <ClCompile Include="src\Features\Configs\Configs.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Menu.cpp" />
+    <ClCompile Include="src\Features\Discord\DiscordRPC.cpp" />
     <ClCompile Include="src\Features\Players\PlayerCore.cpp" />
     <ClCompile Include="src\Features\Players\PlayerUtils.cpp" />
     <ClCompile Include="src\Features\Visuals\Materials\Materials.cpp" />
@@ -34,6 +35,7 @@
     <ClCompile Include="src\SDK\Helpers\ConVars\ConVars.cpp" />
     <ClCompile Include="src\Features\Commands\Commands.cpp" />
     <ClCompile Include="src\Features\ImGui\Render.cpp" />
+    <ClCompile Include="src\Features\ImGui\Fonts\Phobia\PhobiaAssets.cpp" />
     <ClCompile Include="src\Features\Aimbot\Aimbot.cpp" />
     <ClCompile Include="src\Features\Aimbot\AimbotGlobal\AimbotGlobal.cpp" />
     <ClCompile Include="src\Features\Aimbot\AimbotHitscan\AimbotHitscan.cpp" />
@@ -41,6 +43,7 @@
     <ClCompile Include="src\Features\Aimbot\AimbotProjectile\AimbotProjectile.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoAirblast\AutoAirblast.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoDetonate\AutoDetonate.cpp" />
+    <ClCompile Include="src\Features\Aimbot\SmartFlick\SmartFlick.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoHeal\AutoHeal.cpp" />
     <ClCompile Include="src\Features\Misc\AutoQueue\AutoQueue.cpp" />
@@ -78,6 +81,7 @@
     <ClCompile Include="src\BytePatches\BytePatches.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
     <ClCompile Include="src\Features\Spectate\Spectate.cpp" />
+    <ClCompile Include="src\Features\SkinChanger\SkinChanger.cpp" />
     <ClCompile Include="src\Hooks\CHLClient_FrameStageNotify.cpp" />
     <ClCompile Include="src\Hooks\bf_read_ReadString.cpp" />
     <ClCompile Include="src\Hooks\CAchievementMgr_CheckAchievementsEnabled.cpp" />
@@ -391,6 +395,7 @@
     <ClInclude Include="src\Features\Aimbot\AimbotProjectile\AimbotProjectile.h" />
     <ClInclude Include="src\Features\Aimbot\AutoAirblast\AutoAirblast.h" />
     <ClInclude Include="src\Features\Aimbot\AutoDetonate\AutoDetonate.h" />
+    <ClInclude Include="src\Features\Aimbot\SmartFlick\SmartFlick.h" />
     <ClInclude Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.h" />
     <ClInclude Include="src\Features\Aimbot\AutoHeal\AutoHeal.h" />
     <ClInclude Include="src\Features\Misc\AutoQueue\AutoQueue.h" />
@@ -561,12 +566,14 @@
     <ClInclude Include="src\Features\ImGui\Fonts\CascadiaMono\CascadiaMono.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\IconDefinitions.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\MaterialIcons.h" />
+    <ClInclude Include="src\Features\ImGui\Fonts\Phobia\PhobiaAssets.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\Roboto\RobotoMedium.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\Roboto\RobotoBlack.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CEconEntity.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CEconWearable.h" />
     <ClInclude Include="src\Features\Misc\AutoVote\AutoVote.h" />
     <ClInclude Include="src\Features\Spectate\Spectate.h" />
+    <ClInclude Include="src\Features\SkinChanger\SkinChanger.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CHLClient.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CSniperDot.h" />
     <ClInclude Include="src\SDK\Definitions\Misc\IMatchGroupDescription.h" />

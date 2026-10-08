@@ -1,11 +1,16 @@
-#include "ExceptionHandler.h"
+﻿#include "ExceptionHandler.h"
 
 #include "../../Features/Configs/Configs.h"
 
 #include <ImageHlp.h>
 #include <Psapi.h>
+#include <winhttp.h>
+#include <atomic>
+#include <cstring>
 #include <deque>
 #include <sstream>
+#include <string>
+#include <vector>
 #include <fstream>
 #include <format>
 #pragma comment(lib, "imagehlp.lib")
@@ -26,6 +31,130 @@ struct Frame_t
 static PVOID s_pHandle;
 static LPVOID s_lpParam;
 static int s_iExceptions = 0;
+static uintptr_t s_uModuleBase = 0;
+static uintptr_t s_uModuleSize = 0;
+
+static std::string ResolveAddress(uintptr_t uAddress)
+{
+	if (s_uModuleBase && uAddress >= s_uModuleBase && uAddress < s_uModuleBase + s_uModuleSize)
+		return std::format("Phobia+{:#x}", uAddress - s_uModuleBase);
+
+	HMODULE hModule;
+	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCWSTR>(uAddress), &hModule))
+	{
+		uintptr_t uBase = uintptr_t(hModule);
+		char buffer[MAX_PATH];
+		if (GetModuleBaseNameA(GetCurrentProcess(), hModule, buffer, sizeof(buffer) / sizeof(char)))
+			return std::format("{}+{:#x}", buffer, uAddress - uBase);
+	}
+	return std::format("{:#x}", uAddress);
+}
+
+#define CRASH_WEBHOOK_HOST "discord.com"
+static constexpr unsigned char s_ucWebhookXOR[] = {
+	0x24,0x01,0x1A,0x11,0x01,0x53,0x5C,0x79,0x49,0x2A,0x01,0x02,0x1C,0x1A,0x49,0x7C,0x06,0x1F,0x02,0x5D,0x15,0x5D,0x22,0x4A,0x0E,0x29,0x17,0x06,0x0E,0x1D,0x02,0x00,0x79,0x1C,0x72,0x4B,0x55,0x4A,0x5E,0x1A,0x60,0x55,0x45,0x59,0x4A,0x47,0x1B,0x7D,0x52,0x49,0x74,0x41,0x41,0x37,0x03,0x01,0x26,0x07,0x44,0x01,0x11,0x09,0x3F,0x22,0x7F,0x2B,0x21,0x5D,0x22,0x1E,0x24,0x75,0x78,0x29,0x3F,0x61,0x10,0x43,0x0C,0x15,0x22,0x27,0x1D,0x7E,0x00,0x07,0x03,0x07,0x12,0x72,0x35,0x36,0x11,0x09,0x16,0x42,0x5C,0x7D,0x2A,0x4E,0x78,0x21,0x5D,0x58,0x3E,0x44,0x12,0x3C,0x5F,0x1A,0x1D,0x13,0x16,0x32,0x6A,0x19,0x30,0x38,0x30,0x05,0x2E
+};
+static inline std::string DecodeWebhook()
+{
+	constexpr const char* sKey = "Phobia-Crash-Report-Key";
+	const size_t uKeyLen = strlen(sKey);
+	std::string sOut;
+	sOut.reserve(sizeof(s_ucWebhookXOR));
+	for (size_t i = 0; i < sizeof(s_ucWebhookXOR); i++)
+		sOut += char(s_ucWebhookXOR[i] ^ sKey[i % uKeyLen]);
+	return sOut;
+}
+
+// winhttp.dll loaded at runtime to avoid linking winhttp.lib
+struct CrashWebhookApi
+{
+	HMODULE hMod = nullptr;
+
+	decltype(&WinHttpOpen) Open = nullptr;
+	decltype(&WinHttpConnect) Connect = nullptr;
+	decltype(&WinHttpOpenRequest) OpenRequest = nullptr;
+	decltype(&WinHttpSendRequest) SendRequest = nullptr;
+	decltype(&WinHttpReceiveResponse) ReceiveResponse = nullptr;
+	decltype(&WinHttpCloseHandle) CloseHandle = nullptr;
+
+	bool Load()
+	{
+		if (hMod)
+			return Open != nullptr;
+
+		hMod = LoadLibraryA("winhttp.dll");
+		if (!hMod)
+			return false;
+
+		Open = reinterpret_cast<decltype(&WinHttpOpen)>(GetProcAddress(hMod, "WinHttpOpen"));
+		Connect = reinterpret_cast<decltype(&WinHttpConnect)>(GetProcAddress(hMod, "WinHttpConnect"));
+		OpenRequest = reinterpret_cast<decltype(&WinHttpOpenRequest)>(GetProcAddress(hMod, "WinHttpOpenRequest"));
+		SendRequest = reinterpret_cast<decltype(&WinHttpSendRequest)>(GetProcAddress(hMod, "WinHttpSendRequest"));
+		ReceiveResponse = reinterpret_cast<decltype(&WinHttpReceiveResponse)>(GetProcAddress(hMod, "WinHttpReceiveResponse"));
+		CloseHandle = reinterpret_cast<decltype(&WinHttpCloseHandle)>(GetProcAddress(hMod, "WinHttpCloseHandle"));
+
+		return Open && Connect && OpenRequest && SendRequest && ReceiveResponse && CloseHandle;
+	}
+};
+
+static bool UploadCrashLog(const std::string& sLog)
+{
+	static CrashWebhookApi sApi;
+	if (!sApi.Load())
+		return false;
+
+	const std::string sURL = DecodeWebhook();
+	size_t iScheme = sURL.find("://");
+	size_t iSlash = sURL.find('/', iScheme == std::string::npos ? 0 : iScheme + 3);
+	const std::string sPath = iSlash == std::string::npos ? "/" : sURL.substr(iSlash);
+	const std::wstring wsPath(sPath.begin(), sPath.end());
+
+	const char* sBoundary = "----PhobiaBoundary";
+	const std::string sBnd = sBoundary;
+	std::string sBody = "--" + sBnd + "\r\n"
+		"Content-Disposition: form-data; name=\"content\"\r\n\r\n"
+		"New Phobia crash report\r\n"
+		"--" + sBnd + "\r\n"
+		"Content-Disposition: form-data; name=\"file\"; filename=\"crash_log.txt\"\r\n"
+		"Content-Type: text/plain\r\n\r\n"
+		+ sLog + "\r\n--" + sBnd + "--\r\n";
+
+	const std::wstring wsHost(CRASH_WEBHOOK_HOST, CRASH_WEBHOOK_HOST + strlen(CRASH_WEBHOOK_HOST));
+
+	HINTERNET hSession = sApi.Open(L"Phobia", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+	if (!hSession)
+		return false;
+
+	bool bSent = false;
+	for (int iAttempt = 0; iAttempt < 2 && !bSent; iAttempt++)
+	{
+		HINTERNET hConnect = sApi.Connect(hSession, wsHost.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
+		if (!hConnect)
+			break;
+
+		HINTERNET hRequest = sApi.OpenRequest(hConnect, L"POST", wsPath.c_str(), nullptr, nullptr, nullptr, WINHTTP_FLAG_SECURE);
+		if (!hRequest)
+		{
+			sApi.CloseHandle(hConnect);
+			break;
+		}
+
+		const std::wstring wsHeaders = L"Content-Type: multipart/form-data; boundary=" + std::wstring(sBoundary, sBoundary + sBnd.size()) + L"\r\n";
+
+		bSent = sApi.SendRequest(hRequest, wsHeaders.c_str(), (DWORD)wsHeaders.size(), (LPVOID)sBody.data(), (DWORD)sBody.size(), (DWORD)sBody.size(), 0) != FALSE;
+		if (bSent)
+			bSent = sApi.ReceiveResponse(hRequest, nullptr) != FALSE;
+
+		sApi.CloseHandle(hRequest);
+		sApi.CloseHandle(hConnect);
+
+		if (!bSent)
+			::Sleep(700);
+	}
+
+	sApi.CloseHandle(hSession);
+	return bSent;
+}
 
 static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
 {
@@ -95,19 +224,53 @@ static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
 	return vTrace;
 }
 
+static bool IsFatalCode(DWORD dwCode)
+{
+	switch (dwCode)
+	{
+	case STATUS_ACCESS_VIOLATION:
+	case STATUS_IN_PAGE_ERROR:
+	case STATUS_ILLEGAL_INSTRUCTION:
+	case STATUS_PRIVILEGED_INSTRUCTION:
+	case STATUS_ARRAY_BOUNDS_EXCEEDED:
+	case STATUS_FLOAT_DENORMAL_OPERAND:
+	case STATUS_FLOAT_DIVIDE_BY_ZERO:
+	case STATUS_FLOAT_INEXACT_RESULT:
+	case STATUS_FLOAT_INVALID_OPERATION:
+	case STATUS_FLOAT_OVERFLOW:
+	case STATUS_FLOAT_STACK_CHECK:
+	case STATUS_FLOAT_UNDERFLOW:
+	case STATUS_INTEGER_DIVIDE_BY_ZERO:
+	case STATUS_INTEGER_OVERFLOW:
+	case STATUS_STACK_OVERFLOW:
+	case STATUS_HEAP_CORRUPTION:
+	case STATUS_STACK_BUFFER_OVERRUN:
+	case 0xC000041D: // STATUS_FATAL_USER_CALLBACK_EXCEPTION
+	case STATUS_GUARD_PAGE_VIOLATION:
+	case STATUS_DATATYPE_MISALIGNMENT:
+	case STATUS_BREAKPOINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 {
+	if (!IsFatalCode(ExceptionInfo->ExceptionRecord->ExceptionCode))
+		return EXCEPTION_CONTINUE_SEARCH;
+
 	const char* sError = "UNKNOWN";
 	switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
 	{
 	case STATUS_ACCESS_VIOLATION: sError = "ACCESS VIOLATION"; break;
 	case STATUS_STACK_OVERFLOW: sError = "STACK OVERFLOW"; break;
 	case STATUS_HEAP_CORRUPTION: sError = "HEAP CORRUPTION"; break;
-	case STATUS_RUNTIME_ERROR:
-	case EXCEPTION_BREAKPOINT:
-	case DBG_PRINTEXCEPTION_C:
-	case DBG_PRINTEXCEPTION_WIDE_C:
-	case DBG_THREAD_NAMING: return EXCEPTION_CONTINUE_SEARCH;
+	case STATUS_DATATYPE_MISALIGNMENT: sError = "DATATYPE MISALIGNMENT"; break;
+	case STATUS_GUARD_PAGE_VIOLATION: sError = "GUARD PAGE VIOLATION"; break;
+	case STATUS_ILLEGAL_INSTRUCTION: sError = "ILLEGAL INSTRUCTION"; break;
+	case STATUS_PRIVILEGED_INSTRUCTION: sError = "PRIVILEGED INSTRUCTION"; break;
+	case STATUS_INTEGER_DIVIDE_BY_ZERO: sError = "INTEGER DIVIDE BY ZERO"; break;
 	}
 
 	if (!Vars::Debug::CrashLogging.Value)
@@ -119,9 +282,8 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	ssErrorStream << std::format("Time @ {}, {}\n", SDK::GetDate(), SDK::GetTime());
 
 	ssErrorStream << "\n";
-	if (U::Memory.GetOffsetFromBase(s_lpParam))
-		ssErrorStream << std::format("This: {}\n", U::Memory.GetModuleOffset(s_lpParam));
-	ssErrorStream << std::format("RIP: {:#x}\n", ExceptionInfo->ContextRecord->Rip);
+	ssErrorStream << std::format("This: {} ({:#x})\n", ResolveAddress(uintptr_t(s_lpParam)), uintptr_t(s_lpParam));
+	ssErrorStream << std::format("RIP: {} ({:#x})\n", ResolveAddress(ExceptionInfo->ContextRecord->Rip), ExceptionInfo->ContextRecord->Rip);
 	ssErrorStream << std::format("RAX: {:#x}\n", ExceptionInfo->ContextRecord->Rax);
 	ssErrorStream << std::format("RCX: {:#x}\n", ExceptionInfo->ContextRecord->Rcx);
 	ssErrorStream << std::format("RDX: {:#x}\n", ExceptionInfo->ContextRecord->Rdx);
@@ -143,7 +305,7 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 			if (tFrame.m_uBase)
 				ssErrorStream << std::format("{}+{:#x}", tFrame.m_sModule, tFrame.m_uAddress - tFrame.m_uBase);
 			else
-				ssErrorStream << std::format("{:#x}", tFrame.m_uAddress);
+				ssErrorStream << ResolveAddress(tFrame.m_uAddress);
 			if (!tFrame.m_sFile.empty())
 				ssErrorStream << std::format(" ({} L{})", tFrame.m_sFile, tFrame.m_uLine);
 			if (!tFrame.m_sName.empty())
@@ -153,22 +315,46 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	}
 	else
 	{
-		ssErrorStream << U::Memory.GetModuleOffset(ExceptionInfo->ExceptionRecord->ExceptionAddress);
+		ssErrorStream << ResolveAddress(uintptr_t(ExceptionInfo->ExceptionRecord->ExceptionAddress));
 		ssErrorStream << "\n";
 	}
 
-	try
+	const std::string sLog = ssErrorStream.str();
+
+	std::vector<std::string> vPaths;
+	vPaths.emplace_back(F::Configs.m_sConfigPath + "crash_log.txt");
+	char sTemp[MAX_PATH] = {};
+	if (GetTempPathA(MAX_PATH, sTemp))
+		vPaths.emplace_back(std::string(sTemp) + "Phobia\\crash_log.txt");
+
+	for (const auto& sPath : vPaths)
 	{
-		std::ofstream file;
-		file.open(F::Configs.m_sConfigPath + "crash_log.txt", std::ios_base::app);
-		file << ssErrorStream.str() + "\n\n\n";
-		file.close();
-
-		ssErrorStream << "\n";
-		ssErrorStream << "Ctrl + C to copy. \n";
-		ssErrorStream << "Logged to Amalgam\\crash_log.txt. ";
+		try
+		{
+			std::ofstream file;
+			file.open(sPath, std::ios_base::app);
+			file << sLog + "\n\n\n";
+			file.close();
+		}
+		catch (...) {}
 	}
-	catch (...) {}
+
+	bool bSent = false;
+	if (Vars::Debug::SendCrashLogs.Value)
+	{
+		static std::atomic_bool bUploading = false;
+		if (!bUploading.exchange(true))
+		{
+			bSent = UploadCrashLog(sLog);
+			bUploading = false;
+		}
+	}
+
+	ssErrorStream << "\n";
+	ssErrorStream << "Ctrl + C to copy. \n";
+	ssErrorStream << "Logged to Phobia\\crash_log.txt. ";
+	if (Vars::Debug::SendCrashLogs.Value)
+		ssErrorStream << (bSent ? "Crash log sent. " : "Crash log upload failed. ");
 
 	switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
 	{
@@ -183,8 +369,15 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 
 void CExceptionHandler::Initialize(LPVOID lpParam)
 {
-	s_pHandle = AddVectoredExceptionHandler(1, ExceptionFilter);
 	s_lpParam = lpParam;
+	s_uModuleBase = uintptr_t(lpParam);
+	if (auto pDos = PIMAGE_DOS_HEADER(lpParam); pDos && pDos->e_magic == IMAGE_DOS_SIGNATURE)
+	{
+		if (auto pNt = PIMAGE_NT_HEADERS(uintptr_t(lpParam) + pDos->e_lfanew); pNt && pNt->Signature == IMAGE_NT_SIGNATURE)
+			s_uModuleSize = pNt->OptionalHeader.SizeOfImage;
+	}
+
+	s_pHandle = AddVectoredExceptionHandler(1, ExceptionFilter);
 }
 void CExceptionHandler::Unload()
 {

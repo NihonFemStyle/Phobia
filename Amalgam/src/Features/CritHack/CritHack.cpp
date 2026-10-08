@@ -1,5 +1,9 @@
 #include "CritHack.h"
 
+#include "../../SDK/Helpers/Draw/IndicatorPanel.h"
+#include "../../SDK/Helpers/Draw/MemeSenseGfx.h"
+#include "../ImGui/Menu/FA6Icons.h"
+#include "../ImGui/Menu/Menu.h"
 #include "../Ticks/Ticks.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 
@@ -618,40 +622,29 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 	int x = Vars::Menu::CritsDisplay.Value.x;
 	int y = Vars::Menu::CritsDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
-	y -= nTall;
 
-	EAlign align = ALIGN_TOP;
-	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
-	{
-		x -= H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPLEFT;
-	}
-	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.Scale(50, Scale_Round))
-	{
-		x += H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPRIGHT;
-	}
+	IndicatorPanel p;
+	p.Reset(fFont, "Crits", ALIGN_TOP, MS_ICON_FA_BOLT);
 
 	if (!pWeapon->AreRandomCritsEnabled())
 	{
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value, align, "Random crits disabled");
+		p.Row("Random crits disabled", Vars::Colors::IndicatorTextBad.Value);
+		p.Draw(x, y);
+		F::Menu.DragOverlay(Vars::Menu::CritsDisplay, p.OriginX(x), y, p.Width(), p.Height());
 		return;
 	}
-
-
 
 	float flTickBase = TICKS_TO_TIME(pLocal->m_nTickBase());
 
 	if (F::AntiCheatCompatibility.Active())
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value, align, "Anticheat compatibility");
+		p.Row("Anticheat compatibility", Vars::Colors::IndicatorTextBad.Value);
 
 	if (pLocal->IsCritBoosted())
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextMisc.Value, Vars::Menu::Theme::Background.Value, align, "Crit Boosted");
+		p.Row("Crit Boosted", Vars::Colors::IndicatorTextMisc.Value);
 	else if (pWeapon->m_flCritTime() > flTickBase)
 	{
 		float flTime = pWeapon->m_flCritTime() - flTickBase;
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextMisc.Value, Vars::Menu::Theme::Background.Value, align, std::format("Streaming crits {:.1f}s", flTime).c_str());
+		p.Row(std::format("Streaming crits {:.1f}s", flTime).c_str(), Vars::Colors::IndicatorTextMisc.Value);
 	}
 	else if (!m_bCritBanned)
 	{
@@ -660,54 +653,53 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 			if (m_iAvailableCrits > 0)
 			{
 				if (!pWeapon->IsRapidFire() || flTickBase >= pWeapon->m_flLastRapidFireCritCheckTime() + 1.f)
-					H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextGood.Value, Vars::Menu::Theme::Background.Value, align, "Crit Ready");
+					p.Row("Crit Ready", Vars::Colors::IndicatorTextGood.Value);
 				else
 				{
 					float flTime = pWeapon->m_flLastRapidFireCritCheckTime() + 1.f - flTickBase;
-					H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Wait {:.1f}s", flTime).c_str());
+					p.Row(std::format("Wait {:.1f}s", flTime).c_str(), MemeSenseGfx::White());
 				}
 			}
 			else
 			{
 				int iShots = m_iNextCrit;
-				H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value, align, std::format("Crit in {}{} shot{}", iShots, iShots == BUCKET_ATTEMPTS ? "+" : "", iShots == 1 ? "" : "s").c_str());
+				p.Row(std::format("Crit in {}{} shot{}", iShots, iShots == BUCKET_ATTEMPTS ? "+" : "", iShots == 1 ? "" : "s").c_str(), Vars::Colors::IndicatorTextBad.Value);
 			}
 		}
 	}
 	else
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value, align, std::format("Deal {} damage", ceilf(m_flDamageTilFlip)).c_str());
+		p.Row(std::format("Deal {} damage", ceilf(m_flDamageTilFlip)).c_str(), Vars::Colors::IndicatorTextBad.Value);
 	
 	if (m_iPotentialCrits > 0)
 	{
 		int iCrits = m_iAvailableCrits;
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("{}{} / {} crits", iCrits, iCrits == BUCKET_ATTEMPTS ? "+" : "", m_iPotentialCrits).c_str());
+		p.Row(std::format("{}{} / {} crits", iCrits, iCrits == BUCKET_ATTEMPTS ? "+" : "", m_iPotentialCrits).c_str(), MemeSenseGfx::White());
 		
 		if (m_iNextCrit && iCrits)
 		{
 			int iShots = m_iNextCrit;
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Next in {}{} shot{}", iShots, iShots == BUCKET_ATTEMPTS ? "+" : "", iShots == 1 ? "" : "s").c_str());
+			p.Row(std::format("Next in {}{} shot{}", iShots, iShots == BUCKET_ATTEMPTS ? "+" : "", iShots == 1 ? "" : "s").c_str(), MemeSenseGfx::White());
 		}
 	}
 
 	if (m_flDamageTilFlip && !m_bCritBanned)
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Colors::IndicatorTextGood.Value, Vars::Menu::Theme::Background.Value, align, std::format("{} damage", floorf(m_flDamageTilFlip)).c_str());
+		p.Row(std::format("{} damage", floorf(m_flDamageTilFlip)).c_str(), Vars::Colors::IndicatorTextGood.Value);
 
 	if (m_iDesyncDamage)
 	{
 		auto tColor = m_iDesyncDamage < 0
-			? Vars::Menu::Theme::Active.Value.Lerp(Vars::Colors::IndicatorTextMid.Value, std::min(fabsf(m_iDesyncDamage) / 100, 1.f))
+			? TUI::Palette.Text.Lerp(Vars::Colors::IndicatorTextMid.Value, std::min(fabsf(m_iDesyncDamage) / 100, 1.f))
 			: Vars::Colors::IndicatorTextBad.Value;
-		H::Draw.StringOutlined(fFont, x, y += nTall, tColor, Vars::Menu::Theme::Background.Value, align, std::format("{}{} desync", m_iDesyncDamage > 0 ? "+" : "", m_iDesyncDamage).c_str());
+		p.Row(std::format("{}{} desync", m_iDesyncDamage > 0 ? "+" : "", m_iDesyncDamage).c_str(), tColor);
 	}
-
-
 
 	if (Vars::Debug::Info.Value)
 	{
-		H::Draw.StringOutlined(fFont, x, y += nTall * 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("RangedDamage: {}, CritDamage: {}", m_iRangedDamage, m_iCritDamage).c_str());
+		p.Row(std::format("RangedDamage: {}, CritDamage: {}", m_iRangedDamage, m_iCritDamage).c_str(), MemeSenseGfx::White());
+		p.Row(" ", MemeSenseGfx::White());
 
 #ifdef SERVER_CRIT_DATA
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("AllDamage: {} ({})", m_iRangedDamage + m_iMeleeDamage, m_iMeleeDamage).c_str());
+		p.Row(std::format("AllDamage: {} ({})", m_iRangedDamage + m_iMeleeDamage, m_iMeleeDamage).c_str(), MemeSenseGfx::White());
 
 		if (s_pCTFGameStats)
 		{
@@ -719,21 +711,21 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 					int& iCritDamage = pPlayerStats->statsCurrentRound.m_iStat[TFSTAT_DAMAGE_RANGED_CRIT_RANDOM];
 					int& iDamage = pPlayerStats->statsCurrentRound.m_iStat[TFSTAT_DAMAGE];
 
-					//iRangedDamage = m_iRangedDamage;
-					//iCritDamage = m_iCritDamage = 0;
-					//iDamage = m_iRangedDamage + m_iMeleeDamage;
-
-					H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("RangedDamage: {}, CritDamage: {}", iRangedDamage, iCritDamage).c_str());
-					H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("AllDamage: {} ({})", iDamage, iDamage - iRangedDamage).c_str());
+					p.Row(std::format("RangedDamage: {}, CritDamage: {}", iRangedDamage, iCritDamage).c_str(), MemeSenseGfx::White());
+					p.Row(std::format("AllDamage: {} ({})", iDamage, iDamage - iRangedDamage).c_str(), MemeSenseGfx::White());
 				}
 			}
 		}
 
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("ResourceDamage: {} ({})", m_iResourceDamage, m_iMeleeDamage).c_str());
+		p.Row(std::format("ResourceDamage: {} ({})", m_iResourceDamage, m_iMeleeDamage).c_str(), MemeSenseGfx::White());
 #endif
 
-		H::Draw.StringOutlined(fFont, x, y += nTall * 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Bucket: {}, Shots: {}, Crits: {}", pWeapon->m_flCritTokenBucket(), pWeapon->m_nCritChecks(), pWeapon->m_nCritSeedRequests()).c_str());
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Damage: {}, Cost: {}", m_flDamage, m_flCost).c_str());
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("CritChance: {:.2f} ({:.2f})", m_flCritChance, m_flCritChance + 0.1f).c_str());
+		p.Row(" ", MemeSenseGfx::White());
+		p.Row(std::format("Bucket: {}, Shots: {}, Crits: {}", pWeapon->m_flCritTokenBucket(), pWeapon->m_nCritChecks(), pWeapon->m_nCritSeedRequests()).c_str(), MemeSenseGfx::White());
+		p.Row(std::format("Damage: {}, Cost: {}", m_flDamage, m_flCost).c_str(), MemeSenseGfx::White());
+		p.Row(std::format("CritChance: {:.2f} ({:.2f})", m_flCritChance, m_flCritChance + 0.1f).c_str(), MemeSenseGfx::White());
 	}
+
+	p.Draw(x, y);
+	F::Menu.DragOverlay(Vars::Menu::CritsDisplay, p.OriginX(x), y, p.Width(), p.Height());
 }

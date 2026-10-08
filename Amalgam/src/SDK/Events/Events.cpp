@@ -3,18 +3,20 @@
 #include "../../Core/Core.h"
 #include "../../Features/Aimbot/AutoHeal/AutoHeal.h"
 #include "../../Features/Backtrack/Backtrack.h"
+#include "../../Features/ChatUtils/ChatUtils.h"
 #include "../../Features/CheatDetection/CheatDetection.h"
 #include "../../Features/CritHack/CritHack.h"
 #include "../../Features/Misc/Misc.h"
 #include "../../Features/PacketManip/AntiAim/AntiAim.h"
 #include "../../Features/Output/Output.h"
+#include "../../Features/Players/Bans.h"
 #include "../../Features/Resolver/Resolver.h"
 #include "../../Features/Visuals/Visuals.h"
 
 bool CEventListener::Initialize()
 {
 	std::vector<const char*> vEvents = { 
-		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "vote_cast", "item_pickup", "revive_player_notify"
+		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "item_pickup", "revive_player_notify", "player_say"
 	};
 
 	for (auto szEvent : vEvents)
@@ -49,11 +51,31 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 		return;
 
 	F::CritHack.Event(pEvent, uHash, pLocal);
+	F::ChatUtils.Event(pEvent, uHash, pLocal);
 	F::AutoHeal.Event(pEvent, uHash);
 	F::Misc.Event(pEvent, uHash);
 	F::Visuals.Event(pEvent, uHash);
 	switch (uHash)
 	{
+	case FNV1A::Hash32Const("game_newmap"): // ban check when joining a match
+	{
+		F::SteamBans.OnMatchStart();
+		break;
+	}
+	case FNV1A::Hash32Const("player_connect_client"): // ban check when a player joins
+	{
+		int iIndex = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid"));
+		auto pResource = H::Entities.GetResource();
+		if (!pResource || pResource->IsFakePlayer(iIndex) || iIndex == I::EngineClient->GetLocalPlayer())
+			break;
+
+		uint32_t uAccountID = pResource->m_iAccountID(iIndex);
+		if (!uAccountID || H::Entities.InParty(uAccountID))
+			break;
+
+		F::SteamBans.Check(uAccountID);
+		break;
+	}
 	case FNV1A::Hash32Const("player_hurt"):
 	{
 		F::Resolver.PlayerHurt(pEvent);
@@ -65,6 +87,7 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 		if (I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid")) != I::EngineClient->GetLocalPlayer())
 			return;
 
+		F::SteamBans.OnLocalSpawn();
 		F::Backtrack.SetLerp();
 		return;
 	}
@@ -76,6 +99,20 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 		KeyValues* kv = new KeyValues("MVM_Revive_Response");
 		kv->SetBool("accepted", true);
 		I::EngineClient->ServerCmdKeyValues(kv);
+	}
+	case FNV1A::Hash32Const("player_say"):
+	{
+		int iIndex = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid"));
+		auto pResource = H::Entities.GetResource();
+		if (!pResource || pResource->IsFakePlayer(iIndex) || iIndex == I::EngineClient->GetLocalPlayer())
+			break;
+
+		uint32_t uAccountID = pResource->m_iAccountID(iIndex);
+		if (!uAccountID)
+			break;
+
+		F::SteamBans.OnChatMessage(uAccountID, pEvent->GetString("text"));
+		break;
 	}
 	}
 }

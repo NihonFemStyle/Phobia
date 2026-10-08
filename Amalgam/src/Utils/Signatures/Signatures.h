@@ -1,5 +1,6 @@
 #pragma once
 #include "../Macros/Macros.h"
+#include <type_traits>
 #include <vector>
 
 class CSignature
@@ -30,7 +31,19 @@ public:
 	template <typename T, typename... Args> 
 	inline T Call(Args... args) const
 	{
-		return reinterpret_cast<T(__fastcall*)(Args...)>(m_dwVal)(args...);
+		if constexpr (std::is_reference_v<T>)
+			return reinterpret_cast<T(__fastcall*)(Args...)>(m_dwVal)(args...);
+		else
+		{
+			if (!m_dwVal)
+			{
+				if constexpr (std::is_void_v<T>)
+					return;
+				else
+					return {};
+			}
+			return reinterpret_cast<T(__fastcall*)(Args...)>(m_dwVal)(args...);
+		}
 	}
 };
 

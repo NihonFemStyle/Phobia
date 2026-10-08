@@ -4,9 +4,12 @@
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Binds/Binds.h"
 #include "../Features/CheatDetection/CheatDetection.h"
+#include "../Features/Misc/AutoVote/AutoVote.h"
 #include "../Features/CritHack/CritHack.h"
 #include "../Features/Players/PlayerUtils.h"
+#include "../Features/Players/Bans.h"
 #include "../Features/Simulation/MovementSimulation/MovementSimulation.h"
+#include "../Features/SkinChanger/SkinChanger.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Visuals/ESP/ESP.h"
@@ -39,6 +42,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 	{
 		H::Entities.Store();
 		F::PlayerUtils.Store();
+		F::SteamBans.OnFrame();
 
 		F::Backtrack.Store();
 		F::MoveSim.Store();
@@ -54,10 +58,16 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		F::Visuals.Store();
 
 		F::CheatDetection.Run();
+		F::AutoVote.Run();
 		F::Spectate.NetUpdateEnd(pLocal);
 
 		F::Visuals.Modulate();
 		F::Visuals.DrawHitboxes(1);
+		break;
+	}
+	case FRAME_NET_UPDATE_POSTDATAUPDATE_END:
+	{
+		F::SkinChanger.Run();
 		break;
 	}
 	case FRAME_RENDER_START:

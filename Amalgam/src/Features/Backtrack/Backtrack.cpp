@@ -1,5 +1,9 @@
 #include "Backtrack.h"
 
+#include "../../SDK/Helpers/Draw/IndicatorPanel.h"
+#include "../../SDK/Helpers/Draw/MemeSenseGfx.h"
+#include "../ImGui/Menu/FA6Icons.h"
+#include "../ImGui/Menu/Menu.h"
 #include "../PacketManip/FakeLag/FakeLag.h"
 #include "../Ticks/Ticks.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
@@ -427,23 +431,18 @@ void CBacktrack::Draw(CTFPlayer* pLocal)
 	int x = Vars::Menu::PingDisplay.Value.x;
 	int y = Vars::Menu::PingDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
 
-	EAlign align = ALIGN_TOP;
-	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
-	{
-		x -= H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPLEFT;
-	}
-	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.Scale(50, Scale_Round))
-	{
-		x += H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPRIGHT;
-	}
+	// ping ~<=60ms good, ~>=200ms bad, ramped green->yellow->red in between
+	const Color_t tLatency = SeverityColor(Math::RemapVal(flLatency, 60.f, 200.f, 0.f, 1.f));
+	const Color_t tScoreboard = SeverityColor(Math::RemapVal(float(iLatencyScoreboard), 60.f, 200.f, 0.f, 1.f));
 
+	IndicatorPanel p;
+	p.Reset(fFont, "Ping", ALIGN_TOP, MS_ICON_FA_WIFI);
 	if (flFake || Vars::Backtrack::Interp.Value > G::Lerp * 1000)
-		H::Draw.StringOutlined(fFont, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} (+ {:.0f}) ms", flLatency, flFake).c_str());
+		p.Row(std::format("{:.0f} (+ {:.0f}) ms", flLatency, flFake).c_str(), tLatency);
 	else
-		H::Draw.StringOutlined(fFont, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} ms", flLatency).c_str());
-	H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Scoreboard {} ms", iLatencyScoreboard).c_str());
+		p.Row(std::format("{:.0f} ms", flLatency).c_str(), tLatency);
+	p.Row(std::format("Scoreboard {} ms", iLatencyScoreboard).c_str(), tScoreboard);
+	p.Draw(x, y);
+	F::Menu.DragOverlay(Vars::Menu::PingDisplay, p.OriginX(x), y, p.Width(), p.Height());
 }

@@ -23,6 +23,7 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 	DEBUG_RETURN(Direct3DDevice9_Reset, pDevice, pPresentationParameters);
 
 	ImGui_ImplDX9_InvalidateDeviceObjects();
+	F::Menu.InvalidateImages();
 	const HRESULT Original = CALL_ORIGINAL(pDevice, pPresentationParameters);
 	ImGui_ImplDX9_CreateDeviceObjects();
 	return Original;

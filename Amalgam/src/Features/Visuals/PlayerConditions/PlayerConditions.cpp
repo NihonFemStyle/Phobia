@@ -1,5 +1,37 @@
 #include "PlayerConditions.h"
 
+#include "../../../SDK/Helpers/Draw/IndicatorPanel.h"
+#include "../../../SDK/Helpers/Draw/MemeSenseGfx.h"
+#include "../../ImGui/Menu/FA6Icons.h"
+#include "../../ImGui/Menu/Menu.h"
+#include <algorithm>
+
+namespace
+{
+	bool IsGoodCondition(const std::string& s)
+	{
+		const std::vector<std::string> vGood = {
+			"Invulnerable", "Invulnerable-", "Crits", "Mini crits", "Damage bonus", "Megaheal", "Heal", "Overheal",
+			"Bullet+", "Bullet", "Blast+", "Blast", "Fire+", "Fire", "Banner", "Battalions+", "Battalions", "Battalions-",
+			"Conch", "Cloak", "Stealth", "Stealth+", "Blink", "Speed boost", "Hype", "Focus", "No afterburn", "Bonk",
+			"Deadringer", "Feign", "Dominant", "Strength", "Haste", "Regen", "Resist", "Vampire", "Reflect",
+			"Precision", "Agility", "Knockout", "Supernova", "King buff", "Grapple", "Safefall", "Parachute",
+			"Rocketpack", "Swim", "Blastjump", "Dodge", "Prevent death"
+		};
+		return std::find(vGood.begin(), vGood.end(), s) != vGood.end();
+	}
+
+	bool IsBadCondition(const std::string& s)
+	{
+		const std::vector<std::string> vBad = {
+			"Heal debuff", "Only melee", "Slowed", "Stun", "Marked for death", "Jarate", "Milk", "Gas", "Burn", "Bleed",
+			"Airblast", "Air", "Slide", "Sapped", "Medigun debuff", "Reprogrammed", "Freeze input", "Imbalance",
+			"Plagued", "Plague", "Hell", "Purgatory", "Latched", "To player", "By player", "Taunt", "Thriller"
+		};
+		return std::find(vBad.begin(), vBad.end(), s) != vBad.end();
+	}
+}
+
 std::vector<std::string> CPlayerConditions::Get(CTFPlayer* pEntity)
 {
 	std::vector<std::string> vConditions = {};
@@ -391,26 +423,20 @@ void CPlayerConditions::Draw(CTFPlayer* pLocal)
 	int x = Vars::Menu::ConditionsDisplay.Value.x;
 	int y = Vars::Menu::ConditionsDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
-
-	EAlign align = ALIGN_TOP;
-	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
-	{
-		x -= H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPLEFT;
-	}
-	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.Scale(50, Scale_Round))
-	{
-		x += H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPRIGHT;
-	}
 
 	std::vector<std::string> vConditions = Get(pTarget);
 
-	int iOffset = 0;
+	IndicatorPanel p;
+	p.Reset(fFont, "Conditions", ALIGN_TOP, MS_ICON_FA_HEART);
 	for (const std::string& sCondition : vConditions)
 	{
-		H::Draw.StringOutlined(fFont, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition.c_str());
-		iOffset += nTall;
+		Color_t tColor = MemeSenseGfx::White();
+		if (IsGoodCondition(sCondition))
+			tColor = SeverityColor(0.f);
+		else if (IsBadCondition(sCondition))
+			tColor = SeverityColor(1.f);
+		p.Row(sCondition.c_str(), tColor);
 	}
+	p.Draw(x, y);
+	F::Menu.DragOverlay(Vars::Menu::ConditionsDisplay, p.OriginX(x), y, p.Width(), p.Height());
 }

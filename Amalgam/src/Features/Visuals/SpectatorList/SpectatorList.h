@@ -18,6 +18,7 @@ private:
 
 public:
 	bool GetSpectators(CTFPlayer* pTarget);
+	bool HasSpectators() const { return !m_vSpectators.empty(); }
 	void Draw(CTFPlayer* pLocal);
 };
 

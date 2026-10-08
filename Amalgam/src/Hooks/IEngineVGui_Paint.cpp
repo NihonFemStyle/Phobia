@@ -7,6 +7,7 @@
 #include "../Features/Ticks/Ticks.h"
 #include "../Features/CritHack/CritHack.h"
 #include "../Features/Visuals/SpectatorList/SpectatorList.h"
+#include "../Features/Visuals/Watermark/Watermark.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Visuals/PlayerConditions/PlayerConditions.h"
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
@@ -37,6 +38,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 		{
 			F::CameraWindow.Draw();
 
+			F::Watermark.Draw(pLocal);
 			F::AntiAim.Draw(pLocal);
 			F::Visuals.DrawPickupTimers();
 			F::ESP.Draw();

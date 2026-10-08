@@ -55,8 +55,6 @@ MAKE_HOOK(VGuiMenuBuilder_AddMenuItem, S::VGuiMenuBuilder_AddMenuItem(), void*,
 			{
 				int iID = std::distance(F::PlayerUtils.m_vTags.begin(), it);
 				auto& tTag = *it;
-				if (!tTag.m_bAssignable)
-					continue;
 
 				bool bHasTag = F::PlayerUtils.HasTag(s_uAccountID, iID);
 				CALL_ORIGINAL(rcx, std::format("{} {}", bHasTag ? "Remove" : "Add", tTag.m_sName).c_str(), std::format("modifytag{}", iID).c_str(), "tags");

@@ -25,6 +25,7 @@ public:
 
 	std::string m_sCurrentConfig = "default";
 	std::string m_sCurrentVisuals = "default";
+	bool m_bLoaded = false;
 	std::string m_sConfigPath;
 	std::string m_sVisualsPath;
 	std::string m_sCorePath;

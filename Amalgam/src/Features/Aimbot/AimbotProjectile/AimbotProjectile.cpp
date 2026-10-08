@@ -1,12 +1,14 @@
-#include "AimbotProjectile.h"
+﻿#include "AimbotProjectile.h"
 
 #include "../Aimbot.h"
 #include "../../Ticks/Ticks.h"
 #include "../../EnginePrediction/EnginePrediction.h"
 #include "../../World/World.h"
 #include "../AutoAirblast/AutoAirblast.h"
+#include "../SmartFlick/SmartFlick.h"
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include <numeric>
+#include <algorithm>
 
 //#define SPLASH_DEBUG1 // trace splash visualization
 //#define SPLASH_DEBUG2 // plane splash visualization
@@ -1334,8 +1336,9 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 
 				// attempted to have a headshot check though this seems more detrimental than useful outside of smooth aimbot
 				if (tTarget.m_nAimedHitbox == HITBOX_HEAD && !bSecondTest &&
-					(Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Smooth
-					|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Assistive))
+(Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Smooth
+				|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Assistive
+				|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::SoftAim))
 				{	// loop and see if closest hitbox is head
 					auto aBones = F::Backtrack.GetBones(tTarget.m_pEntity);
 					if (!aBones)
@@ -1421,6 +1424,7 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 		switch (Vars::Aimbot::General::AimType.Value)
 		{
 		case Vars::Aimbot::General::AimTypeEnum::Smooth:
+		case Vars::Aimbot::General::AimTypeEnum::SoftAim:
 			if (Vars::Aimbot::General::AssistStrength.Value == 100.f)
 				break;
 			[[fallthrough]];
@@ -1761,6 +1765,9 @@ bool CAimbotProjectile::Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& v
 		vOut = vCurAngle.LerpAngle(vToAngle, Vars::Aimbot::General::AssistStrength.Value / 100.f);
 		bReturn = true;
 		break;
+	case Vars::Aimbot::General::AimTypeEnum::SoftAim:
+		vOut = vCurAngle;
+		break;
 	case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		Vec3 vMouseDelta = G::CurrentUserCmd->viewangles.DeltaAngle(G::LastUserCmd->viewangles);
 		Vec3 vTargetDelta = vToAngle.DeltaAngle(G::LastUserCmd->viewangles);
@@ -1779,6 +1786,9 @@ bool CAimbotProjectile::Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& v
 // assume angle calculated outside with other overload
 void CAimbotProjectile::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
 {
+	if (F::SmartFlick.Run(pCmd, vAngles, iMethod))
+		return;
+
 	bool bUnsure = F::Ticks.IsTimingUnsure();
 	switch (iMethod)
 	{
@@ -1804,6 +1814,8 @@ void CAimbotProjectile::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
 		SDK::FixMovement(pCmd, vAngles);
 		pCmd->viewangles = vAngles;
 		G::SilentAngles = true;
+	case Vars::Aimbot::General::AimTypeEnum::SoftAim:
+		break;
 	}
 }
 
@@ -2079,8 +2091,545 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 	return false;
 }
 
+// Ballistic method (port of jvnkbin's projectile aimbot)
+
+enum BallisticBBox_t : uint8_t
+{
+	BALLISTIC_BOTTOM,
+	BALLISTIC_MID,
+	BALLISTIC_TOP,
+	BALLISTIC_COUNT
+};
+
+struct BallisticHitpoint_t
+{
+	Vec3 m_vPos = {};
+	Vec3 m_vAng = {};
+	float m_flTime = 0.f;
+	uint8_t m_iBBox = 0;
+	bool m_bVisible = false;
+};
+
+static inline bool BallisticIsGravityWeapon(int nWeaponID)
+{
+	switch (nWeaponID)
+	{
+	case TF_WEAPON_GRENADELAUNCHER:
+	case TF_WEAPON_PIPEBOMBLAUNCHER:
+	case TF_WEAPON_CANNON:
+	case TF_WEAPON_COMPOUND_BOW:
+	case TF_WEAPON_CROSSBOW:
+		return true;
+	}
+	return false;
+}
+
+static inline bool BallisticUsesHull(int nWeaponID)
+{
+	switch (nWeaponID)
+	{
+	case TF_WEAPON_GRENADELAUNCHER:
+	case TF_WEAPON_PIPEBOMBLAUNCHER:
+	case TF_WEAPON_CANNON:
+		return true;
+	}
+	return false;
+}
+
+static inline float BallisticDrag(int nWeaponID, CTFWeaponBase* pWeapon)
+{
+	switch (nWeaponID)
+	{
+	case TF_WEAPON_PIPEBOMBLAUNCHER: return 0.16f;
+	case TF_WEAPON_GRENADELAUNCHER:
+		return pWeapon->m_iItemDefinitionIndex() == Demoman_m_TheLochnLoad ? 0.07f : 0.11f;
+	case TF_WEAPON_CANNON: return 0.5f; // approximate, cannon drag is heavier than grenade
+	}
+	return 0.f;
+}
+
+// closed-form ballistic solve, transcribes jvnkbin's compute_projectile_launch_angle_and_time_to_arrival
+static inline bool BallisticSolve(const Vec3& vTarget, const Vec3& vFire, float flSpeed, float flGravity, float flDrag, Vec3& vAng, float& flTime)
+{
+	if (!flGravity)
+	{
+		vAng = Math::VectorAngles(vTarget - vFire);
+		flTime = vFire.DistTo(vTarget) / std::max(1.f, flSpeed);
+		return true;
+	}
+
+	const float g = flGravity;
+	const Vec3 v = vTarget - vFire;
+	const float dx = sqrtf(v.x * v.x + v.y * v.y);
+	const float dy = v.z;
+	if (dx < 0.001f)
+		return false;
+
+	const float flMaxSpeed = std::max(1.f, flSpeed);
+
+	// first pass
+	{
+		const float v0 = flMaxSpeed;
+		const float root = v0 * v0 * v0 * v0 - g * (g * dx * dx + 2.0f * dy * v0 * v0);
+		if (root < 0.0f)
+			return false;
+
+		vAng = { -Math::Rad2Deg(std::atanf((v0 * v0 - std::sqrtf(root)) / (g * dx))), Math::Rad2Deg(std::atan2f(v.y, v.x)), 0.f };
+		flTime = dx / (std::cosf(-Math::Deg2Rad(vAng.x)) * v0);
+	}
+
+	// second pass, account for drag
+	if (flDrag)
+	{
+		const float v0 = flMaxSpeed - (flMaxSpeed * flTime) * flDrag;
+		const float root = v0 * v0 * v0 * v0 - g * (g * dx * dx + 2.0f * dy * v0 * v0);
+		if (root < 0.0f)
+			return false;
+
+		vAng = { -Math::Rad2Deg(std::atanf((v0 * v0 - std::sqrtf(root)) / (g * dx))), Math::Rad2Deg(std::atan2f(v.y, v.x)), 0.f };
+		flTime = dx / (std::cosf(-Math::Deg2Rad(vAng.x)) * v0);
+
+		Vec3 vForward, vUp; Math::AngleVectors(vAng, &vForward, nullptr, &vUp);
+		vAng = Math::VectorAngles(vForward * flMaxSpeed - vUp * 200.f);
+	}
+
+	return true;
+}
+
+static inline void BallisticCorrectTime(float& flTime, float flLatency, CTFWeaponBase* pWeapon)
+{
+	flTime += flLatency;
+
+	if (pWeapon->GetWeaponID() == TF_WEAPON_PIPEBOMBLAUNCHER)
+	{
+		const float flArmTime = SDK::AttribHookValue(0.8f, "sticky_arm_time", pWeapon);
+		if (flTime < flArmTime)
+			flTime += fabsf(flTime - flArmTime);
+	}
+}
+
+static inline Vec3 BallisticBBoxOffset(const Vec3& vOrigin, const Vec3& vMins, const Vec3& vMaxs, float flScale, uint8_t iBBox, bool bGravity)
+{
+	const float flMaxsZ = vMaxs.z * flScale;
+	switch (iBBox)
+	{
+	case BALLISTIC_TOP: return { vOrigin.x, vOrigin.y, vOrigin.z + vMins.z + flMaxsZ * 0.9f };
+	case BALLISTIC_MID: return { vOrigin.x, vOrigin.y, vOrigin.z + vMins.z + flMaxsZ * 0.5f };
+	case BALLISTIC_BOTTOM: return { vOrigin.x, vOrigin.y, vOrigin.z + vMins.z + flMaxsZ * (bGravity ? 0.15f : 0.1f) };
+	}
+	return vOrigin;
+}
+
+// transcribes jvnkbin's is_position_visible, uses Phobia projectile sim to step the real physics
+static inline bool BallisticPathVisible(CTFPlayer* pLocal, CBaseEntity* pTarget, const Vec3& vTarget, ProjectileInfo& tProj, float flTime, int nWeaponID)
+{
+	CTraceFilterCollideable filter = {};
+	filter.pSkip = pLocal;
+	filter.iPlayer = PLAYER_ALL;
+	filter.iObject = OBJECT_ALL;
+	const int nMask = MASK_PLAYERSOLID & ~CONTENTS_HITBOX;
+
+	const int iTicks = TIME_TO_TICKS(flTime);
+	const bool bUsesHull = BallisticUsesHull(nWeaponID);
+	const bool bPhysics = bUsesHull; // physics-capable projectile types are exactly the hull-weapons in our supported set
+	const Vec3 vFire = tProj.m_vPos;
+
+	if (!F::ProjSim.Initialize(tProj, true))
+		return false;
+
+	CGameTrace trace = {};
+	Vec3 vPrev = vFire;
+	for (int n = 0; n <= iTicks; n++)
+	{
+		// jvnkbin steps the projectile exactly `time` ticks, with a zero-length
+		// segment on the final iteration so a startsolid (inside the target) trace can hit.
+		if (n < iTicks && (n > 0 || !bPhysics))
+			F::ProjSim.RunTick(tProj);
+		const Vec3 vNew = F::ProjSim.GetOrigin();
+
+		if (bUsesHull)
+			SDK::TraceHull(vPrev, vNew, -tProj.m_vHull, tProj.m_vHull, nMask, &filter, &trace);
+		else
+			SDK::Trace(vPrev, vNew, nMask, &filter, &trace);
+
+		if (vFire.DistTo(trace.endpos) > vFire.DistTo(vTarget))
+			break;
+
+		if (trace.m_pEnt == pTarget)
+			return true;
+		if (trace.DidHit())
+			return false;
+
+		vPrev = vNew;
+	}
+
+	// final step straight at the corrected aim point
+	SDK::Trace(trace.endpos, vTarget, nMask, &filter, &trace);
+	if (trace.DidHit())
+		return false;
+
+	return true;
+}
+
+static inline bool BallisticSelectRecords(CTFWeaponBase* pWeapon, CTFPlayer* pTarget, int iHitboxes, std::vector<BallisticHitpoint_t>& vHitpoints, Vec3& vPos, Vec3& vAng, float& flTime)
+{
+	bool bAnyVisible = false;
+	for (auto& tHit : vHitpoints)
+	{
+		if (tHit.m_bVisible)
+		{
+			bAnyVisible = true;
+			break;
+		}
+	}
+	if (!bAnyVisible)
+		return false;
+
+	const bool bOnGround = pTarget->IsOnGround();
+
+	if (pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW)
+	{
+		for (auto& tHit : vHitpoints)
+		{
+			if (!tHit.m_bVisible && tHit.m_iBBox != BALLISTIC_TOP)
+				continue;
+			vPos = tHit.m_vPos, vAng = tHit.m_vAng, flTime = tHit.m_flTime;
+			return true;
+		}
+	}
+
+	if (iHitboxes & Vars::Aimbot::Projectile::HitboxesEnum::PrioritizeFeet && bOnGround)
+	{
+		for (auto& tHit : vHitpoints)
+		{
+			if (!tHit.m_bVisible || tHit.m_iBBox != BALLISTIC_BOTTOM)
+				continue;
+			vPos = tHit.m_vPos, vAng = tHit.m_vAng, flTime = tHit.m_flTime;
+			return true;
+		}
+	}
+
+	for (auto& tHit : vHitpoints)
+	{
+		if (!tHit.m_bVisible)
+			continue;
+		if (!bOnGround && tHit.m_iBBox != BALLISTIC_MID)
+			continue;
+		vPos = tHit.m_vPos, vAng = tHit.m_vAng, flTime = tHit.m_flTime;
+		return true;
+	}
+
+	return false;
+}
+
+bool CAimbotProjectile::CanHitBallistic(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, Target_t& tTarget)
+{
+	auto pTarget = tTarget.m_pEntity;
+	if (!pTarget)
+		return false;
+
+	if (!pTarget->IsPlayer())
+	{
+		ProjectileInfo tProj = {};
+		if (!F::ProjSim.GetInfo(pLocal, pWeapon, {}, tProj, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum))
+			return false;
+
+		const int nWeaponID = pWeapon->GetWeaponID();
+		const float flSpeed = std::max(1.f, tProj.m_flVelocity);
+		const float flGravity = tProj.m_flGravity;
+		const bool bGravityWeapon = BallisticIsGravityWeapon(nWeaponID);
+		const float flDrag = BallisticDrag(nWeaponID, pWeapon);
+		const Vec3 vShootPos = pLocal->GetShootPos();
+		const float flLatency = F::Backtrack.GetReal();
+
+		const Vec3 vOrigin = pTarget->m_vecOrigin();
+		const Vec3 vMins = pTarget->m_vecMins();
+		const Vec3 vMaxs = pTarget->m_vecMaxs();
+		const float flScale = pTarget->As<CBaseAnimating>()->m_flModelScale();
+
+		std::vector<BallisticHitpoint_t> vHitpoints = {};
+		const int iMaxTicks = TIME_TO_TICKS(1.5f);
+		for (int iBBox = BALLISTIC_BOTTOM; iBBox < BALLISTIC_COUNT; iBBox++)
+		{
+			const Vec3 vPoint = BallisticBBoxOffset(vOrigin, vMins, vMaxs, flScale, iBBox, bGravityWeapon);
+
+			Vec3 vAng = {}; float flTime = 0.f;
+			if (!BallisticSolve(vPoint, vShootPos, flSpeed, flGravity, flDrag, vAng, flTime))
+				continue;
+
+			BallisticCorrectTime(flTime, flLatency, pWeapon);
+			if (TIME_TO_TICKS(flTime) > iMaxTicks)
+				continue;
+
+			ProjectileInfo tProjAng = {};
+			if (!F::ProjSim.GetInfo(pLocal, pWeapon, vAng, tProjAng, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum))
+				continue;
+
+			const bool bVisible = BallisticPathVisible(pLocal, pTarget, vPoint, tProjAng, flTime, nWeaponID);
+
+			BallisticHitpoint_t tHit = {};
+			tHit.m_vPos = vPoint;
+			tHit.m_vAng = tProjAng.m_vAng;
+			tHit.m_flTime = flTime;
+			tHit.m_iBBox = iBBox;
+			tHit.m_bVisible = bVisible;
+			vHitpoints.push_back(tHit);
+		}
+
+		if (vHitpoints.empty())
+			return false;
+
+		Vec3 vHitPos = {}, vHitAng = {};
+		float flHitTime = 0.f;
+		bool bSelected = false;
+		for (auto& tHit : vHitpoints)
+		{
+			if (!tHit.m_bVisible)
+				continue;
+			vHitPos = tHit.m_vPos;
+			vHitAng = tHit.m_vAng;
+			flHitTime = tHit.m_flTime;
+			bSelected = true;
+			break;
+		}
+		if (!bSelected)
+			return false;
+
+		tTarget.m_vPos = vHitPos;
+		tTarget.m_vAngleTo = vHitAng;
+		tTarget.m_flTime = flHitTime;
+		return true;
+	}
+
+	auto pPlayer = pTarget->As<CTFPlayer>();
+	if (!pPlayer)
+		return false;
+
+	MoveStorage tStorage = {};
+	if (!F::MoveSim.Initialize(pPlayer, tStorage, false, false))
+		return false;
+
+	ProjectileInfo tProj = {};
+	if (!F::ProjSim.GetInfo(pLocal, pWeapon, {}, tProj, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum))
+	{
+		F::MoveSim.Restore(tStorage);
+		return false;
+	}
+
+	const int nWeaponID = pWeapon->GetWeaponID();
+	const float flSpeed = std::max(1.f, tProj.m_flVelocity);
+	const float flGravity = tProj.m_flGravity;
+	const bool bGravityWeapon = BallisticIsGravityWeapon(nWeaponID);
+	const float flDrag = BallisticDrag(nWeaponID, pWeapon);
+	const Vec3 vShootPos = pLocal->GetShootPos();
+	const float flLatency = F::Backtrack.GetReal();
+
+	const int iHitboxes = Vars::Aimbot::Projectile::Hitboxes.Value;
+	const bool bAuto = iHitboxes & Vars::Aimbot::Projectile::HitboxesEnum::Auto;
+	bool bFoundBottom = !(bAuto || iHitboxes & Vars::Aimbot::Projectile::HitboxesEnum::Feet || iHitboxes & Vars::Aimbot::Projectile::HitboxesEnum::PrioritizeFeet && pPlayer->IsOnGround());
+	bool bFoundMid = !(bAuto || iHitboxes & Vars::Aimbot::Projectile::HitboxesEnum::Body);
+	bool bFoundTop = !(bAuto || iHitboxes & Vars::Aimbot::Projectile::HitboxesEnum::Head);
+
+	std::vector<BallisticHitpoint_t> vHitpoints = {};
+
+	const int iMaxTicks = TIME_TO_TICKS(1.5f);
+	for (int i = 0; i <= iMaxTicks; i++)
+	{
+		if (tStorage.m_bFailed)
+			break;
+
+		F::MoveSim.RunTick(tStorage, false);
+		const Vec3 vSimOrigin = tStorage.m_MoveData.m_vecAbsOrigin;
+
+		for (int iBBox = BALLISTIC_BOTTOM; iBBox < BALLISTIC_COUNT; iBBox++)
+		{
+			bool bFound;
+			switch (iBBox)
+			{
+			case BALLISTIC_BOTTOM: bFound = bFoundBottom; break;
+			case BALLISTIC_MID: bFound = bFoundMid; break;
+			default: bFound = bFoundTop; break;
+			}
+			if (bFound)
+				continue;
+
+			const Vec3 vPoint = BallisticBBoxOffset(vSimOrigin, pPlayer->m_vecMins(), pPlayer->m_vecMaxs(), pPlayer->m_flModelScale(), iBBox, bGravityWeapon);
+
+			Vec3 vAng = {}; float flTime = 0.f;
+			if (!BallisticSolve(vPoint, vShootPos, flSpeed, flGravity, flDrag, vAng, flTime))
+				continue;
+
+			BallisticCorrectTime(flTime, flLatency, pWeapon);
+			if (TIME_TO_TICKS(flTime) > i)
+				continue;
+
+			ProjectileInfo tProjAng = {};
+			if (!F::ProjSim.GetInfo(pLocal, pWeapon, vAng, tProjAng, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum))
+				continue;
+
+			const bool bVisible = BallisticPathVisible(pLocal, pTarget, vPoint, tProjAng, flTime, nWeaponID);
+
+			BallisticHitpoint_t tHit = {};
+			tHit.m_vPos = vPoint;
+			tHit.m_vAng = tProjAng.m_vAng;
+			tHit.m_flTime = flTime;
+			tHit.m_iBBox = iBBox;
+			tHit.m_bVisible = bVisible;
+			vHitpoints.push_back(tHit);
+
+			switch (iBBox)
+			{
+			case BALLISTIC_BOTTOM: bFoundBottom = true; break;
+			case BALLISTIC_MID: bFoundMid = true; break;
+			default: bFoundTop = true; break;
+			}
+		}
+
+		if (bFoundBottom && bFoundMid && bFoundTop)
+			break;
+	}
+
+	F::MoveSim.Restore(tStorage);
+
+	if (pPlayer->IsOnGround())
+		std::ranges::sort(vHitpoints.begin(), vHitpoints.end(), [](const BallisticHitpoint_t& a, const BallisticHitpoint_t& b) { return a.m_flTime < b.m_flTime; });
+
+	if (vHitpoints.empty())
+		return false;
+
+	Vec3 vHitPos = {}, vHitAng = {};
+	float flHitTime = 0.f;
+	if (!BallisticSelectRecords(pWeapon, pPlayer, iHitboxes, vHitpoints, vHitPos, vHitAng, flHitTime))
+		return false;
+
+	tTarget.m_vPos = vHitPos;
+	tTarget.m_vAngleTo = vHitAng;
+	tTarget.m_flTime = flHitTime;
+	return true;
+}
+
+bool CAimbotProjectile::RunBallistic(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
+{
+	const int nWeaponID = pWeapon->GetWeaponID();
+
+	if (pWeapon->m_iItemDefinitionIndex() == Soldier_m_RocketJumper || pWeapon->m_iItemDefinitionIndex() == Demoman_s_StickyJumper)
+		return false;
+
+	if (F::AimbotGlobal.ShouldHoldAttack(pWeapon))
+		pCmd->buttons |= IN_ATTACK;
+	const bool bAlwaysCharge = nWeaponID == TF_WEAPON_CANNON && Vars::Aimbot::Projectile::DoubleDonk.Value
+		&& Vars::Aimbot::Projectile::AlwaysCharge.Value && Vars::Aimbot::General::AutoShoot.Value;
+	if (bAlwaysCharge)
+		pCmd->buttons |= IN_ATTACK;
+	if (!Vars::Aimbot::General::AimType.Value)
+		return false;
+
+	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon);
+	if (vTargets.empty())
+	{
+		if (bAlwaysCharge && pWeapon->As<CTFGrenadeLauncher>()->m_flDetonateTime() > 0.f)
+			pCmd->buttons &= ~IN_ATTACK; // flush stale charge, no target to donk
+		return false;
+	}
+
+	// quick cull of targets that are too far to hit within the simulation window
+	ProjectileInfo tProj = {};
+	if (!F::ProjSim.GetInfo(pLocal, pWeapon, {}, tProj, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum))
+		return false;
+	const float flLatency = F::Backtrack.GetReal();
+	const Vec3 vShootPos = pLocal->GetShootPos();
+	const float flSpeed = std::max(1.f, tProj.m_flVelocity);
+	{
+		vTargets.erase(std::remove_if(vTargets.begin(), vTargets.end(), [&](const Target_t& t)
+		{
+			return vShootPos.DistTo(t.m_pEntity->m_vecOrigin()) / flSpeed + flLatency > 1.5f;
+		}), vTargets.end());
+		if (vTargets.empty())
+		{
+			if (bAlwaysCharge && pWeapon->As<CTFGrenadeLauncher>()->m_flDetonateTime() > 0.f)
+				pCmd->buttons &= ~IN_ATTACK; // flush stale charge, targets out of range
+			return false;
+		}
+	}
+
+	for (auto& tTarget : vTargets)
+	{
+		if (!CanHitBallistic(pLocal, pWeapon, tTarget))
+			continue;
+
+		if (!F::AimbotGlobal.ShouldAimAtAngle(tTarget.m_vAngleTo))
+			continue;
+
+		if (tTarget.m_pEntity->IsPlayer())
+			pCmd->tick_count = TIME_TO_TICKS(tTarget.m_pEntity->As<CTFPlayer>()->m_flSimulationTime() + G::Lerp);
+
+		if (Vars::Aimbot::General::AutoShoot.Value)
+		{
+			switch (nWeaponID)
+			{
+			case TF_WEAPON_COMPOUND_BOW:
+			case TF_WEAPON_PIPEBOMBLAUNCHER:
+				pCmd->buttons |= IN_ATTACK;
+				if (pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f)
+					pCmd->buttons &= ~IN_ATTACK;
+				break;
+			case TF_WEAPON_CANNON:
+				pCmd->buttons |= IN_ATTACK;
+				if (Vars::Aimbot::Projectile::DoubleDonk.Value && tTarget.m_pEntity->IsPlayer() && pWeapon->As<CTFGrenadeLauncher>()->m_flDetonateTime() > 0.f)
+				{
+					const bool bImpactKills = Vars::Aimbot::Projectile::SmartSwap.Value
+						&& tTarget.m_pEntity->As<CTFPlayer>()->m_iHealth() < (pLocal->IsCritBoosted() ? 150.f : 50.f);
+
+					const float flFuse = pWeapon->As<CTFGrenadeLauncher>()->m_flDetonateTime() - I::GlobalVars->curtime;
+					const float flWindow = Vars::Aimbot::Projectile::DoubleDonkAbove.Value / 1000.f;
+					const float flTimeToHit = tTarget.m_flTime;
+					if (bImpactKills || flFuse <= flTimeToHit + flWindow)
+						pCmd->buttons &= ~IN_ATTACK;
+				}
+				break;
+			case TF_WEAPON_ROCKETLAUNCHER:
+			case TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT:
+			case TF_WEAPON_PARTICLE_CANNON:
+			case TF_WEAPON_CROSSBOW:
+				pCmd->buttons |= IN_ATTACK, pCmd->buttons &= ~IN_ATTACK2;
+				break;
+			default:
+				pCmd->buttons |= IN_ATTACK;
+			}
+		}
+
+		F::Aimbot.m_bRan = G::Attacking = SDK::IsAttacking(pLocal, pWeapon, pCmd, true);
+
+		G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
+		G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount, 0 };
+
+		Aim(pCmd, tTarget.m_vAngleTo);
+
+		if (Vars::Debug::Info.Value)
+		{
+			static int iLastPrint = 0;
+			if (I::GlobalVars->tickcount - iLastPrint > 66)
+			{
+				iLastPrint = I::GlobalVars->tickcount;
+				SDK::Output("Ballistic", std::format("fired ent {} at ({:.0f} {:.0f} {:.0f}) tick {}", tTarget.m_pEntity->entindex(), tTarget.m_vPos.x, tTarget.m_vPos.y, tTarget.m_vPos.z, pCmd->tick_count).c_str());
+			}
+		}
+		return true;
+	}
+
+	if (bAlwaysCharge && pWeapon->As<CTFGrenadeLauncher>()->m_flDetonateTime() > 0.f)
+		pCmd->buttons &= ~IN_ATTACK; // flush stale charge, no hittable target in fuse range
+	return false;
+}
+
 void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	if (Vars::Aimbot::Projectile::Method.Value == Vars::Aimbot::Projectile::MethodEnum::Ballistic)
+	{
+		RunBallistic(pLocal, pWeapon, pCmd);
+		return;
+	}
+
 	const bool bSuccess = RunMain(pLocal, pWeapon, pCmd);
 #ifdef SPLASH_DEBUG5
 	if (Vars::Aimbot::General::AimType.Value && !s_mTraceCount.empty())

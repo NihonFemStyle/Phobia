@@ -1,5 +1,9 @@
 #include "SpectatorList.h"
 
+#include "../../../SDK/Helpers/Draw/IndicatorPanel.h"
+#include "../../../SDK/Helpers/Draw/MemeSenseGfx.h"
+#include "../../ImGui/Menu/FA6Icons.h"
+#include "../../ImGui/Menu/Menu.h"
 #include "../../Players/PlayerUtils.h"
 #include "../../Spectate/Spectate.h"
 
@@ -92,37 +96,27 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 	case OBS_MODE_THIRDPERSON:
 		pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
 	}
-	if (!pTarget || !pTarget->IsPlayer()
-		|| !GetSpectators(pTarget))
+	if (!pTarget || !pTarget->IsPlayer())
 		return;
+
+	// populate the list so the chip renders even with no one spectating us
+	GetSpectators(pTarget);
 
 	int x = Vars::Menu::SpectatorsDisplay.Value.x;
 	int y = Vars::Menu::SpectatorsDisplay.Value.y + 8;
-	int iconOffset = 0;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(3);
-
-	EAlign align = ALIGN_TOP;
-	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
-	{
-		x -= H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPLEFT;
-	}
-	else if (x >= H::Draw.m_nScreenW - 100 + H::Draw.Scale(50, Scale_Round))
-	{
-		x += H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPRIGHT;
-	}
 
 	auto pResource = H::Entities.GetResource();
 	int iIndex = pTarget->entindex();
-	const char* sName = pTarget != pLocal ? F::PlayerUtils.GetPlayerName(iIndex, pResource->GetName(iIndex)) : "You";
-	H::Draw.StringOutlined(fFont, x, y, Vars::Menu::Theme::Accent.Value, Vars::Menu::Theme::Background.Value, align, std::format("Spectating {}:", sName).c_str());
+	const char* sName = pTarget != pLocal
+		? (pResource ? F::PlayerUtils.GetPlayerName(iIndex, pResource->GetName(iIndex)) : "Unknown")
+		: "You";
+
+	IndicatorPanel p;
+	p.Reset(fFont, std::format("Spectating {}:", sName).c_str(), ALIGN_TOP, MS_ICON_FA_EYE);
 	for (auto& tSpectator : m_vSpectators)
 	{
-		y += nTall;
-
-		Color_t tColor = Vars::Menu::Theme::Active.Value;
+		Color_t tColor = MemeSenseGfx::White();
 		if (H::Entities.IsFriend(tSpectator.m_iIndex))
 			tColor = F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(FRIEND_TAG)].m_tColor;
 		else if (H::Entities.InParty(tSpectator.m_iIndex))
@@ -133,8 +127,10 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 			tColor = tColor.Lerp({ 255, 150, 0, 255 }, 0.5f);
 
 		if (tSpectator.m_flRespawnIn != -1.f)
-			H::Draw.StringOutlined(fFont, x + iconOffset, y, tColor, Vars::Menu::Theme::Background.Value, align, std::format("{} ({} - respawn {}s)", tSpectator.m_sName, tSpectator.m_sMode, tSpectator.m_flRespawnIn).c_str());
+			p.Row(std::format("{} ({} - respawn {}s)", tSpectator.m_sName, tSpectator.m_sMode, tSpectator.m_flRespawnIn).c_str(), tColor);
 		else
-			H::Draw.StringOutlined(fFont, x + iconOffset, y, tColor, Vars::Menu::Theme::Background.Value, align, std::format("{} ({})", tSpectator.m_sName, tSpectator.m_sMode).c_str());
+			p.Row(std::format("{} ({})", tSpectator.m_sName, tSpectator.m_sMode).c_str(), tColor);
 	}
+	p.Draw(x, y);
+	F::Menu.DragOverlay(Vars::Menu::SpectatorsDisplay, p.OriginX(x), y, p.Width(), p.Height());
 }

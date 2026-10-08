@@ -31,7 +31,7 @@ private:
 
 	CTFPlayer* m_pLocal = nullptr;
 	CTFWeaponBase* m_pLocalWeapon = nullptr;
-	CTFPlayerResource* m_pPlayerResource = nullptr;
+	int m_iPlayerResource = 0;
 
 	std::array<std::vector<CBaseEntity*>, EntityEnum::GroupsMax> m_aGroups = {};
 
@@ -98,6 +98,7 @@ public:
 	int GetParty(int iIndex);
 	int GetParty(uint32_t uAccountID);
 	int GetPartyCount();
+	int GetPartySize();
 };
 
 ADD_FEATURE_CUSTOM(CEntities, Entities, H);

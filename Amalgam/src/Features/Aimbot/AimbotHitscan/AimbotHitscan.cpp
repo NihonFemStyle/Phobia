@@ -5,6 +5,7 @@
 #include "../../Resolver/Resolver.h"
 #include "../../NoSpread/NoSpread.h"
 #include "../../Simulation/MovementSimulation/MovementSimulation.h"
+#include "../SmartFlick/SmartFlick.h"
 #include "../../Visuals/Visuals.h"
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 
@@ -356,6 +357,7 @@ std::vector<Vec3> CAimbotHitscan::GetHitboxPoints(CBaseEntity* pTarget, CTFWeapo
 	{
 	case Vars::Aimbot::General::AimTypeEnum::Smooth:
 	case Vars::Aimbot::General::AimTypeEnum::Assistive:
+	case Vars::Aimbot::General::AimTypeEnum::SoftAim:
 		if (!Vars::Aimbot::General::AssistStrength.Value)
 			return vPoints; // triggerbot
 	}
@@ -425,19 +427,40 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 		}
 	}
 
-	// if we're doubletapping, we can't change viewangles so work around that
-	static int iTargetBone = 0;
-	Vec3* pHoldAngle = F::Ticks.GetShootAngle(); if (pHoldAngle && bPlayer && vRecords.size() > 1)
+	// prefer the record that lines up with our crosshair within the backtrack window
+	// (doubletap forces this too - we can't change viewangles, so backtrack adapts to the held angle)
+	bool bPreferCrosshair = Vars::Backtrack::PreferCrosshair.Value;
+	Vec3* pHoldAngle = F::Ticks.GetShootAngle(); if (pHoldAngle)
+		bPreferCrosshair = true;
+	Vec3 vPreferredAngle = pHoldAngle ? *pHoldAngle - F::NoSpread.GetOffset() : G::CurrentUserCmd->viewangles;
+	if (bPreferCrosshair && bPlayer && !vHitboxes.empty() && vRecords.size() > 1)
 	{
-		Vec3 vHoldAngle = *pHoldAngle - F::NoSpread.GetOffset();
+		int iBone = vHitboxes.front().m_pBox ? vHitboxes.front().m_pBox->bone : 0;
 		std::sort(vRecords.begin(), vRecords.end(), [&](const TickRecord* a, const TickRecord* b) -> bool
 		{
-			Vec3 vPosA = { a->m_aBones[iTargetBone][0][3], a->m_aBones[iTargetBone][1][3], a->m_aBones[iTargetBone][2][3] };
-			Vec3 vPosB = { b->m_aBones[iTargetBone][0][3], b->m_aBones[iTargetBone][1][3], b->m_aBones[iTargetBone][2][3] };
+			if (Vars::Backtrack::PreferOnShot.Value && a->m_bOnShot != b->m_bOnShot)
+				return a->m_bOnShot > b->m_bOnShot;
+
+			Vec3 vPosA = { a->m_aBones[iBone][0][3], a->m_aBones[iBone][1][3], a->m_aBones[iBone][2][3] };
+			Vec3 vPosB = { b->m_aBones[iBone][0][3], b->m_aBones[iBone][1][3], b->m_aBones[iBone][2][3] };
 			Vec3 vAnglesA = Math::CalcAngle(m_vEyePos, vPosA);
 			Vec3 vAnglesB = Math::CalcAngle(m_vEyePos, vPosB);
-			return vHoldAngle.DeltaAngle(vAnglesA).Length2DSqr() < vHoldAngle.DeltaAngle(vAnglesB).Length2DSqr();
+			return vPreferredAngle.DeltaAngle(vAnglesA).Length2DSqr() < vPreferredAngle.DeltaAngle(vAnglesB).Length2DSqr();
 		});
+	}
+
+	// pre-engage scan guard: before a shot is committed the exhaustive record x hitbox
+	// walk runs every tick for every candidate, which is the dominant fps cost on a
+	// crowded server (each pair costs engine traces). The front of both sorted lists is
+	// already the best slice (closest-to-time records, highest-priority hitboxes), so a
+	// few of each is enough to answer "can I hit and where". While attacking the full
+	// list is kept so backtrack precision is preserved.
+	if (G::Attacking != 1)
+	{
+		if (vRecords.size() > 5)
+			vRecords.resize(5);
+		if (vHitboxes.size() > 3)
+			vHitboxes.resize(3);
 	}
 
 	float flBoneScale = std::max(Vars::Aimbot::Hitscan::BoneSizeMinimumScale.Value, Vars::Aimbot::Hitscan::MultipointScale.Value / 100.f);
@@ -493,7 +516,6 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 					{
 						tTarget.m_bBacktrack = true;
 						tTarget.m_nAimedHitbox = tHitbox.m_iHitbox;
-						iTargetBone = tHitbox.m_pBox->bone;
 					}
 					return true;
 				}
@@ -607,6 +629,9 @@ bool CAimbotHitscan::Aim(const Vec3& vCurAngle, Vec3 vToAngle, Vec3& vOut, int i
 		vOut = vCurAngle.LerpAngle(vToAngle, Vars::Aimbot::General::AssistStrength.Value / 100.f);
 		bReturn = true;
 		break;
+	case Vars::Aimbot::General::AimTypeEnum::SoftAim:
+		vOut = vCurAngle;
+		break;
 	case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		Vec3 vMouseDelta = G::CurrentUserCmd->viewangles.DeltaAngle(G::LastUserCmd->viewangles);
 		Vec3 vTargetDelta = vToAngle.DeltaAngle(G::LastUserCmd->viewangles);
@@ -625,6 +650,9 @@ bool CAimbotHitscan::Aim(const Vec3& vCurAngle, Vec3 vToAngle, Vec3& vOut, int i
 // assume angle calculated outside with other overload
 void CAimbotHitscan::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
 {
+	if (F::SmartFlick.Run(pCmd, vAngles, iMethod))
+		return;
+
 	bool bUnsure = F::Ticks.IsTimingUnsure();
 	switch (iMethod)
 	{
@@ -649,6 +677,8 @@ void CAimbotHitscan::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
 		SDK::FixMovement(pCmd, vAngles);
 		pCmd->viewangles = vAngles;
 		G::SilentAngles = true;
+	case Vars::Aimbot::General::AimTypeEnum::SoftAim:
+		break;
 	}
 }
 

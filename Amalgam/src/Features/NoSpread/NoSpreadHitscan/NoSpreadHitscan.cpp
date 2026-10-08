@@ -1,5 +1,9 @@
 #include "NoSpreadHitscan.h"
 
+#include "../../../SDK/Helpers/Draw/IndicatorPanel.h"
+#include "../../../SDK/Helpers/Draw/MemeSenseGfx.h"
+#include "../../ImGui/Menu/FA6Icons.h"
+#include "../../ImGui/Menu/Menu.h"
 #include "../../Ticks/Ticks.h"
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include <regex>
@@ -205,24 +209,18 @@ void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
 	int x = Vars::Menu::SeedPredictionDisplay.Value.x;
 	int y = Vars::Menu::SeedPredictionDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
 
-	EAlign align = ALIGN_TOP;
-	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
-	{
-		x -= H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPLEFT;
-	}
-	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.Scale(50, Scale_Round))
-	{
-		x += H::Draw.Scale(42, Scale_Round);
-		align = ALIGN_TOPRIGHT;
-	}
+	const Color_t cColor = m_bSynced ? MemeSenseGfx::White() : MemeSenseGfx::ComboText();
 
-	const auto& cColor = m_bSynced ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
+	// mantissa step is our precision proxy: <=2 good, >=8 bad (long uptime -> bigger step)
+	const Color_t cState = m_bSynced ? SeverityColor(Math::RemapVal(m_flMantissaStep, 2.f, 8.f, 0.f, 1.f)) : MemeSenseGfx::ComboText();
 
-	H::Draw.StringOutlined(fFont, x, y, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Uptime {}", GetFormat(m_flServerTime)).c_str());
-	H::Draw.StringOutlined(fFont, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Mantissa step {}", m_flMantissaStep).c_str());
+	IndicatorPanel p;
+	p.Reset(fFont, "Seed", ALIGN_TOP, MS_ICON_FA_SEEDLING);
+	p.Row(std::format("Uptime {}", GetFormat(m_flServerTime)).c_str(), cState);
+	p.Row(std::format("Mantissa step {}", m_flMantissaStep).c_str(), cState);
 	if (Vars::Debug::Info.Value)
-		H::Draw.StringOutlined(fFont, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Delta {:.3f}", m_dTimeDelta).c_str());
+		p.Row(std::format("Delta {:.3f}", m_dTimeDelta).c_str(), cColor);
+	p.Draw(x, y);
+	F::Menu.DragOverlay(Vars::Menu::SeedPredictionDisplay, p.OriginX(x), y, p.Width(), p.Height());
 }

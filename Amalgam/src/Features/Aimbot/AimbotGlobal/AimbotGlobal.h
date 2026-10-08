@@ -18,6 +18,7 @@ struct Target_t
 	Vec3 m_vAngleTo = {};
 	float m_flFOVTo = std::numeric_limits<float>::max();
 	float m_flDistTo = std::numeric_limits<float>::max();
+	float m_flTime = 0.f;
 	int m_nPriority = 0;
 	int m_nAimedHitbox = -1;
 

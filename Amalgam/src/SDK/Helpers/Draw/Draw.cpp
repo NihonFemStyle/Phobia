@@ -16,6 +16,8 @@ MAKE_SIGNATURE(RenderSphere, "engine.dll", "48 8B C4 44 89 48 ? F3 0F 11 48", 0x
 
 void CDraw::Start(bool bBadFontCheck)
 {
+	TUI::Update();
+
 	I::MatSystemSurface->StartDrawing();
 	I::MatSystemSurface->DisableClipping(true);
 

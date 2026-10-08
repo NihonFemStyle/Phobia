@@ -6,6 +6,21 @@
 #include "../../Simulation/MovementSimulation/MovementSimulation.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 
+static inline void ApplyDormantFade(CBaseEntity* pEntity, float& flAlpha)
+{
+	if (!Vars::Misc::MannVsMachine::DormantESP.Value || !pEntity->IsDormant())
+		return;
+
+	auto pDormancy = H::Entities.GetDormancy(pEntity->entindex());
+	if (!pDormancy)
+		return;
+
+	const float flDuration = pEntity->IsPlayer() ? 1.f : 5.f;
+	const float flRemaining = pDormancy->m_flLastUpdate + flDuration - I::GlobalVars->curtime;
+	if (flRemaining > 0.f)
+		flAlpha *= Math::RemapVal(flRemaining, 0.f, flDuration, 0.f, 1.f);
+}
+
 static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* pGroup, std::unordered_map<CBaseEntity*, PlayerCache_t>& mCache)
 {
 	int iIndex = pPlayer->entindex();
@@ -22,6 +37,7 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 
 	PlayerCache_t& tCache = mCache[pPlayer];
 	tCache.m_flAlpha = pGroup->m_tColor.a / 255.f;
+	ApplyDormantFade(pPlayer, tCache.m_flAlpha);
 	tCache.m_tColor = F::Groups.GetColor(pPlayer, pGroup).Alpha(255);
 	tCache.m_bBox = pGroup->m_iESP & ESPEnum::Box;
 	tCache.m_bBones = pGroup->m_iESP & ESPEnum::Bones;
@@ -385,6 +401,7 @@ static inline void StoreBuilding(CBaseObject* pBuilding, CTFPlayer* pLocal, Grou
 
 	BuildingCache_t& tCache = mCache[pBuilding];
 	tCache.m_flAlpha = pGroup->m_tColor.a / 255.f;
+	ApplyDormantFade(pBuilding, tCache.m_flAlpha);
 	tCache.m_tColor = F::Groups.GetColor(pOwner ? pOwner : pBuilding, pGroup).Alpha(255);
 	tCache.m_bBox = pGroup->m_iESP & ESPEnum::Box;
 

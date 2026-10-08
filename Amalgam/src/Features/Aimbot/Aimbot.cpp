@@ -7,6 +7,7 @@
 #include "AutoAirblast/AutoAirblast.h"
 #include "AutoHeal/AutoHeal.h"
 #include "AutoRocketJump/AutoRocketJump.h"
+#include "SmartFlick/SmartFlick.h"
 #include "../Misc/Misc.h"
 #include "../Visuals/Visuals.h"
 
@@ -74,10 +75,87 @@ void CAimbot::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	RunMain(pLocal, pWeapon, pCmd);
 
 	G::Attacking = SDK::IsAttacking(pLocal, pWeapon, pCmd, true);
+
+	if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::SoftAim
+		&& G::AimTarget.m_iEntIndex
+		&& G::AimPoint.m_iTickCount)
+	{
+		if (m_iSoftAimEnt != G::AimTarget.m_iEntIndex)
+		{
+			m_iSoftAimEnt = G::AimTarget.m_iEntIndex;
+			m_bSoftAimEngaged = false;
+		}
+
+		auto pTarget = I::ClientEntityList->GetClientEntity(G::AimTarget.m_iEntIndex);
+		if (pTarget && !pTarget->IsDormant() && pLocal->IsAlive()
+			&& I::GlobalVars->tickcount - G::AimTarget.m_iTickCount <= G::AimTarget.m_iDuration)
+		{
+			constexpr float flEngageRadius = 10.f;
+			constexpr float flDragRadius = 10.f;
+			const Vec3 vTargetAngle = Math::CalcAngle(pLocal->GetShootPos(), G::AimPoint.m_vOrigin);
+			const Vec3 vDelta = pCmd->viewangles.DeltaAngle(vTargetAngle);
+			const float flLen = vDelta.Length2D();
+			if (m_bSoftAimEngaged || flLen <= flEngageRadius)
+			{
+				m_bSoftAimEngaged = true;
+				if (flLen > flDragRadius)
+				{
+					pCmd->viewangles = vTargetAngle + vDelta / flLen * flDragRadius;
+					Math::ClampAngles(pCmd->viewangles);
+				}
+			}
+		}
+		else if (m_bSoftAimEngaged)
+		{
+			m_bSoftAimEngaged = false;
+			m_iSoftAimEnt = 0;
+		}
+	}
 }
 
 void CAimbot::Draw(CTFPlayer* pLocal)
 {
+	if (Vars::Aimbot::General::SmartFlick.Value
+		&& (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Plain
+			|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Silent
+			|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Smooth)
+		&& Vars::Visuals::Prediction::SmartFlickCrosshair.Value
+		&& Vars::Colors::SmartFlickCrosshair.Value.a
+		&& pLocal->IsAlive()
+		&& G::AimPoint.m_iTickCount)
+	{
+		Vec3 vScreen;
+		if (SDK::W2S(G::AimPoint.m_vOrigin, vScreen))
+		{
+			const auto& tColor = Vars::Colors::SmartFlickCrosshair.Value;
+			const int x = int(vScreen.x), y = int(vScreen.y);
+			const int nSize = H::Draw.Scale(6), nLen = H::Draw.Scale(16);
+			H::Draw.Line(x - nLen, y, x - nSize, y, tColor);
+			H::Draw.Line(x + nSize, y, x + nLen, y, tColor);
+			H::Draw.Line(x, y - nLen, x, y - nSize, tColor);
+			H::Draw.Line(x, y + nSize, x, y + nLen, tColor);
+		}
+	}
+
+	if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::SoftAim
+		&& Vars::Visuals::Prediction::SoftAimCrosshair.Value
+		&& Vars::Colors::SoftAimCrosshair.Value.a
+		&& pLocal->IsAlive()
+		&& G::AimPoint.m_iTickCount)
+	{
+		Vec3 vScreen;
+		if (SDK::W2S(G::AimPoint.m_vOrigin, vScreen))
+		{
+			const auto& tColor = Vars::Colors::SoftAimCrosshair.Value;
+			const int x = int(vScreen.x), y = int(vScreen.y);
+			const int nSize = H::Draw.Scale(6), nLen = H::Draw.Scale(16);
+			H::Draw.Line(x - nLen, y, x - nSize, y, tColor);
+			H::Draw.Line(x + nSize, y, x + nLen, y, tColor);
+			H::Draw.Line(x, y - nLen, x, y - nSize, tColor);
+			H::Draw.Line(x, y + nSize, x, y + nLen, tColor);
+		}
+	}
+
 	if (!Vars::Aimbot::General::FOVCircle.Value || !Vars::Colors::FOVCircle.Value.a || !pLocal->CanAttack(false))
 		return;
 

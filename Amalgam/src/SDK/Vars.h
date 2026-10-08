@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../SDK/Definitions/Types.h"
 #include "../Utils/Macros/Macros.h"
 #include <windows.h>
@@ -167,14 +167,16 @@ public:
 
 NAMESPACE_BEGIN(Vars)
 	NAMESPACE_BEGIN(Menu)
-		CVar(CheatTitle, "Cheat title", std::string("Amalgam"), VISUAL | DROPDOWN_AUTOUPDATE);
-		CVar(CheatTag, "Cheat tag", std::string("[Amalgam]"), VISUAL);
+		CVar(CheatTitle, "Cheat title", std::string("Phobia"), VISUAL | DROPDOWN_AUTOUPDATE);
+		CVar(CheatTag, "Cheat tag", std::string("[Phobia]"), VISUAL);
+		CVar(CheatSubtitle, "Cheat subtitle", std::string("PHOBIA LOADER"), VISUAL);
 		CVar(PrimaryKey, "Primary key", VK_INSERT, NOBIND);
 		CVar(SecondaryKey, "Secondary key", VK_F3, NOBIND);
 
 		CVar(BindWindow, "Bind window", true);
 		CVar(BindWindowTitle, "Bind window title", true);
 		CVar(MenuShowsBinds, "Menu shows binds", false, NOBIND);
+		CVar(BindPreview, "Preview binds", false, NOBIND);
 
 		CVarEnum(Indicators, "Indicators", 0b00000, VISUAL | DROPDOWN_MULTI, nullptr,
 			VA_LIST("Ticks", "Crit hack", "Spectators", "Ping", "Conditions", "Seed prediction"),
@@ -187,16 +189,111 @@ NAMESPACE_BEGIN(Vars)
 		CVar(PingDisplay, "Ping display", DragBox_t(), VISUAL | NOBIND);
 		CVar(ConditionsDisplay, "Conditions display", DragBox_t(), VISUAL | NOBIND);
 		CVar(SeedPredictionDisplay, "Seed prediction display", DragBox_t(), VISUAL | NOBIND);
+		CVar(SnapOverlays, "Snap overlays", true, NOBIND);
+
+		// flat Phobia chrome for the in-game overlay panels (indicator chips, DT panel,
+		// binds window): solid grey card, 1px border, no glass/glow/rail/ember accents.
+		NAMESPACE_BEGIN(Overlay)
+			CVarEnum(Style, "Overlay style", 1, VISUAL, nullptr,
+				VA_LIST("Glass", "Solid", "Minimal"),
+				Glass, Solid, Minimal);
+			CVar(Animated, "Animations", false, VISUAL);
+			CVar(Rounded, "Rounded corners", true, VISUAL);
+			CVar(Glow, "Accent glow", false, VISUAL);
+			CVar(Rail, "Brand rail", false, VISUAL);
+			CVar(Ember, "Ember strip", false, VISUAL);
+			CVar(Border, "Accent border", true, VISUAL);
+			CVar(GlowIntensity, "Glow intensity", 0.6f, VISUAL | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.1f, 1.f, 0.05f);
+			CVar(Opacity, "Opacity", 0.85f, VISUAL | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.3f, 1.f, 0.05f);
+		NAMESPACE_END(Overlay)
 
 		CVar(Scale, "Scale", 1.f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
 		CVar(CheapText, "Cheap text", false, NOBIND);
 
+		// Phobia chrome customization. These are consumed directly by the single menu (see Features/ImGui/Menu).
+		NAMESPACE_BEGIN(Chrome)
+			CVar(Header, "Header band", true, VISUAL);
+			CVar(HeaderGlow, "Header glow", true, VISUAL);
+			CVar(HeaderFx, "Header dust", true, VISUAL);
+			CVar(Rail, "Brand rail", true, VISUAL);
+			CVar(SubtabIcons, "Subtab icons", true, VISUAL);
+			CVar(Ember, "Ember strips", true, VISUAL);
+			CVar(Splash, "Boot splash", true, VISUAL);
+		NAMESPACE_END(Chrome)
+
 		NAMESPACE_BEGIN(Theme)
-			CVar(Accent, "Accent color", Color_t(175, 150, 255, 255), VISUAL);
-			CVar(Background, "Background color", Color_t(0, 0, 0, 250), VISUAL);
+			CVar(Accent, "Accent color", Color_t(255, 255, 255, 255), VISUAL); // phobia accent (white)
+			CVar(Background, "Background color", Color_t(26, 26, 26, 255), VISUAL); // phobia content grey
 			CVar(Active, "Active color", Color_t(255, 255, 255, 255), VISUAL);
-			CVar(Inactive, "Inactive color", Color_t(150, 150, 150, 255), VISUAL);
+			CVar(Inactive, "Inactive color", Color_t(105, 105, 105, 255), VISUAL);
+
+			// section group-box header chrome
+			CVar(SectionBand, "Section band", Color_t(41, 41, 41, 255), VISUAL); // panel card bg
+			CVar(SectionIcon, "Section icon", Color_t(255, 255, 255, 255), VISUAL); // Accent
+			CVar(SectionTitle, "Section title", Color_t(255, 255, 255, 255), VISUAL); // White
+			CVar(SectionBackground, "Section background", Color_t(41, 41, 41, 255), VISUAL); // panel card bg
+			CVar(SectionBorder, "Section border", Color_t(50, 50, 50, 255), VISUAL); // Line
+
+			// subtab segmented-row chrome
+			CVar(SubtabBackground, "Subtab background", Color_t(41, 41, 41, 255), VISUAL); // panel card bg
+			CVar(SubtabBorder, "Subtab border", Color_t(50, 50, 50, 255), VISUAL); // Line
+			CVar(SubtabSelected, "Subtab selected", Color_t(58, 58, 58, 255), VISUAL); // ActiveBg
+			CVar(SubtabHovered, "Subtab hover", Color_t(50, 50, 50, 255), VISUAL); // SidebarHover
+			CVar(SubtabAccent, "Subtab accent", Color_t(255, 255, 255, 255), VISUAL); // Accent
+			CVar(SubtabText, "Subtab text", Color_t(105, 105, 105, 255), VISUAL); // ComboText
+			CVar(SubtabTextSelected, "Subtab text selected", Color_t(255, 255, 255, 255), VISUAL); // White
+
+			// slider chrome
+			CVar(SliderTrack, "Slider track", Color_t(41, 41, 41, 255), VISUAL); // CheckboxOff
+			CVar(SliderFill, "Slider fill", Color_t(105, 105, 105, 255), VISUAL); // SliderFill
+			CVar(SliderBorder, "Slider border", Color_t(50, 50, 50, 255), VISUAL); // Line
+			CVar(SliderAccent, "Slider accent", Color_t(255, 255, 255, 255), VISUAL); // Accent
+
+			// interactive widget chrome (buttons, toggles, dropdowns, text input bars, keybind buttons, quicksave)
+			CVar(WidgetBackground, "Widget background", Color_t(41, 41, 41, 255), VISUAL); // panel card bg
+			CVar(WidgetBackgroundHover, "Widget background hover", Color_t(55, 55, 55, 255), VISUAL); // WidgetHover
+			CVar(WidgetBackgroundActive, "Widget background active", Color_t(60, 60, 60, 255), VISUAL); // ActiveBg
+			CVar(WidgetBorder, "Widget border", Color_t(50, 50, 50, 255), VISUAL); // Line
+			CVar(WidgetBorderFocus, "Widget border focus", Color_t(90, 90, 90, 255), VISUAL); // Focus
+			CVar(WidgetIcon, "Widget icon", Color_t(255, 255, 255, 255), VISUAL); // Accent
+			CVar(WidgetText, "Widget text", Color_t(255, 255, 255, 255), VISUAL); // White
+			CVar(WidgetTextDim, "Widget text dim", Color_t(132, 132, 132, 255), VISUAL); // TextDim
+			CVar(WidgetTextSub, "Widget subtext", Color_t(105, 105, 105, 255), VISUAL); // ComboText
+			CVar(WidgetTextSubHover, "Widget subtext hover", Color_t(205, 205, 205, 255), VISUAL); // ComboTextHover
+			CVar(WidgetCheckbox, "Widget checkbox", Color_t(41, 41, 41, 255), VISUAL); // CheckboxOff
 		NAMESPACE_END(Theme)
+
+		NAMESPACE_BEGIN(Bans)
+			CVar(Enabled, "Steam bans", true, NOBIND);
+			CVar(SteamKey, "Steam API key", std::string(""), NOBIND);
+			CVar(SteamHistoryKey, "SteamHistory API key", std::string(""), NOBIND);
+			CVar(RefreshInterval, "Refresh interval", 15, NOBIND | SLIDER_MIN, 1, 120, 1);
+		NAMESPACE_END(Bans)
+
+		NAMESPACE_BEGIN(Watermark)
+			CVar(Enabled, "Watermark", true, VISUAL);
+			CVarEnum(Parts, "Watermark parts", 0b11111, VISUAL | DROPDOWN_MULTI, nullptr,
+				VA_LIST("Cheat title", "Player name", "FPS", "Ping", "Build date"),
+				CheatTitle = 1 << 0, PlayerName = 1 << 1, FPS = 1 << 2, Ping = 1 << 3, BuildDate = 1 << 4);
+			CVarEnum(Style, "Watermark style", 0, VISUAL, nullptr,
+				VA_LIST("Top left", "Top right", "Bottom left", "Bottom right"),
+				TopLeft, TopRight, BottomLeft, BottomRight);
+			CVar(FlowSpeed, "Flow speed", 0.85f, VISUAL | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.05f, 3.f, 0.05f);
+			CVarEnum(Icon, "Watermark icon", 0, VISUAL, nullptr,
+				VA_LIST("Dot", "Bolt", "Bullseye", "Eye", "Signal", "Heart", "Dice", "Gear"),
+				Dot, Bolt, Bullseye, Eye, Signal, Heart, Dice, Gear);
+			CVar(Font, "Watermark font", std::string("Comfortaa"), VISUAL | DROPDOWN_AUTOUPDATE);
+			CVar(FontSize, "Watermark font size", 13, VISUAL | SLIDER_MIN, 8, 48, 1);
+		NAMESPACE_END(Watermark)
+
+		NAMESPACE_BEGIN(Music)
+			CVar(Enabled, "Music player", false, NOBIND);
+			CVar(ShowTitle, "Show title", true, NOBIND);
+			CVar(ShowArtist, "Show artist", true, NOBIND);
+			CVar(ShowProgress, "Show progress", true, NOBIND);
+			CVar(Opacity, "Opacity", 1.f, NOBIND | SLIDER_MIN, 0.1f, 1.f, 0.05f);
+			CVar(Box, "Music box", WindowBox_t{}, NOBIND);
+		NAMESPACE_END(Music)
 	NAMESPACE_END(Menu)
 
 	NAMESPACE_BEGIN(Colors)
@@ -211,6 +308,8 @@ NAMESPACE_BEGIN(Vars)
 
 		CVar(Local, "Local color", Color_t(255, 255, 255), VISUAL);
 		CVar(FOVCircle, "FOV circle color", Color_t(255, 255, 255, 100), VISUAL);
+		CVar(SmartFlickCrosshair, "Smart flick crosshair color", Color_t(255, 128, 0, 255), VISUAL);
+		CVar(SoftAimCrosshair, "Soft aim crosshair color", Color_t(120, 255, 120, 255), VISUAL);
 		CVar(SpellFootstep, "Spell footstep color", Color_t(255, 255, 255, 255), VISUAL);
 
 		CVar(WorldModulation, VA_LIST("World modulation", "World modulation color"), Color_t(255, 255, 255, 255), VISUAL);
@@ -252,8 +351,8 @@ NAMESPACE_BEGIN(Vars)
 	NAMESPACE_BEGIN(Aimbot)
 		NAMESPACE_BEGIN(General, Aimbot)
 			CVarEnum(AimType, "Aim type", 0, NONE, nullptr,
-				VA_LIST("Off", "Plain", "Smooth", "Silent", "Locking", "Assistive"),
-				Off, Plain, Smooth, Silent, Locking, Assistive);
+				VA_LIST("Off", "Plain", "Smooth", "Silent", "Locking", "Assistive", "Soft"),
+				Off, Plain, Smooth, Silent, Locking, Assistive, SoftAim);
 			CVarEnum(TargetSelection, "Target selection", 0, NONE, nullptr,
 				VA_LIST("FOV", "Distance", "Hybrid"),
 				FOV, Distance, Hybrid);
@@ -270,9 +369,16 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AssistStrength, "Assist strength", 25.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 1.f, "%g%%");
 			CVar(TickTolerance, "Tick tolerance", 4, SLIDER_CLAMP, 0, 21);
 			CVar(AutoShoot, "Auto shoot", true);
+			CVar(TargetLock, "Target Lock", true);
 			CVar(FOVCircle, "FOV Circle", true, VISUAL);
 			CVar(LeadAndRestrict, "Lead and restrict", false, VISUAL);
 			CVar(NoSpread, "No spread", false);
+			CVar(SmartFlick, "Smart flick", false);
+			CVar(Overflick, "Overflick", true);
+			CVar(DistanceMin, VA_LIST("Flick distance min", "Smart flick distance min"), 3.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 30.f);
+			CVar(DistanceMax, VA_LIST("Flick distance max", "Smart flick distance max"), 6.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 30.f);
+			CVar(TimeMin, VA_LIST("Flick time min", "Smart flick time min"), 200.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 3000.f);
+			CVar(TimeMax, VA_LIST("Flick time max", "Smart flick time max"), 350.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 3000.f);
 
 			CVarEnum(AimHoldsFire, "Aim holds fire", 2, NOSAVE | DEBUGVAR, nullptr,
 				VA_LIST("False", "Minigun only", "Always"),
@@ -304,24 +410,24 @@ NAMESPACE_BEGIN(Vars)
 		NAMESPACE_END(HITSCAN)
 
 		NAMESPACE_BEGIN(Projectile)
+			CVarEnum(Method, "Method", 0, NONE, nullptr,
+				VA_LIST("Legacy", "Ballistic"),
+				Legacy, Ballistic);
 			CVarEnum(StrafePrediction, VA_LIST("Predict", "Strafe prediction"), 0b11, DROPDOWN_MULTI, "Off",
 				VA_LIST("Air strafing", "Ground strafing"),
 				Air = 1 << 0, Ground = 1 << 1);
-			CVarEnum(Hitboxes, VA_LIST("Hitboxes", "Projectile hitboxes"), 0b001111, DROPDOWN_MULTI, nullptr,
-				VA_LIST("Auto", "##Divider", "Head", "Body", "Feet", "##Divider", "Bodyaim if lethal", "Prioritize feet"),
-				Auto = 1 << 0, Head = 1 << 1, Body = 1 << 2, Feet = 1 << 3, BodyaimIfLethal = 1 << 4, PrioritizeFeet = 1 << 5);
-			CVarEnum(SplashPrediction, "Splash prediction", 0, NONE, nullptr,
+			CVarEnum(SplashPrediction, VA_LIST("Splash", "Splash prediction"), 0, NONE, nullptr,
 				VA_LIST("Off", "Include", "Prefer", "Only"),
 				Off, Include, Prefer, Only);
-			CVarEnum(SplashMode, "Splash mode", 0, NONE, nullptr,
-				VA_LIST("Trace", "Face"),
-				Trace, Face);
 			CVarEnum(AutoDetonate, "Auto detonate", 0b00, DROPDOWN_MULTI, "Off",
 				VA_LIST("Stickies", "Flares", "##Divider", "Prevent self damage", "Ignore invisible"),
 				Stickies = 1 << 0, Flares = 1 << 1, PreventSelfDamage = 1 << 2, IgnoreInvisible = 1 << 3);
 			CVarEnum(AutoAirblast, "Auto airblast", 0b000, DROPDOWN_MULTI, "Off",
 				VA_LIST("Enabled", "##Divider", "Redirect", "Ignore FOV"),
 				Enabled = 1 << 0, Redirect = 1 << 1, IgnoreFOV = 1 << 2);
+			CVarEnum(Hitboxes, VA_LIST("Hitboxes", "Projectile hitboxes"), 0b001111, DROPDOWN_MULTI, nullptr,
+				VA_LIST("Auto", "##Divider", "Head", "Body", "Feet", "##Divider", "Bodyaim if lethal", "Prioritize feet"),
+				Auto = 1 << 0, Head = 1 << 1, Body = 1 << 2, Feet = 1 << 3, BodyaimIfLethal = 1 << 4, PrioritizeFeet = 1 << 5);
 			CVarEnum(Modifiers, VA_LIST("Modifiers", "Projectile modifiers"), 0b0010, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Charge weapon", "Cancel charge", "Use arm time", "Air splash", "Lob angles", "Target dormant"),
 				ChargeWeapon = 1 << 0, CancelCharge = 1 << 1, UseArmTime = 1 << 2, AirSplash = 1 << 3, LobAngles = 1 << 4, TargetDormant = 1 << 5);
@@ -330,6 +436,10 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AutodetRadius, "Autodet radius", 90.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
 			CVar(SplashRadius, "Splash radius", 90.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
 			CVar(AutoRelease, "Auto release", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
+			CVar(DoubleDonkAbove, VA_LIST("Double donk above", "Double donk release window"), 0, SLIDER_CLAMP, 0, 1000, 25, "%i ms");
+			CVar(DoubleDonk, "Smart Cannon Fuse", true);
+			CVar(AlwaysCharge, "Always Charge", true);
+			CVar(SmartSwap, "Smart Swap", true);
 
 			CVar(GroundSamples, "Samples", 33, NOSAVE | DEBUGVAR, 3, 66);
 			CVar(GroundStraightFuzzyValue, "Straight fuzzy value", 100.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 500.f, 25.f);
@@ -362,6 +472,9 @@ NAMESPACE_BEGIN(Vars)
 			CVar(HuntsmanPullPoint, "Huntsman pull point", false, NOSAVE | DEBUGVAR);
 			CVar(HuntsmanPullNoZ, "Pull no Z", false, NOSAVE | DEBUGVAR);
 
+			CVarEnum(SplashMode, "Splash mode", 0, NOSAVE | DEBUGVAR, nullptr,
+				VA_LIST("Trace", "Face"),
+				Trace, Face);
 			CVar(SplashAirCount, "Splash air count", 0, NOSAVE | DEBUGVAR | SLIDER_MIN, 0, 10);
 			CVar(SplashPointsDirect, "Splash points direct", 100, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0, 400, 5);
 			CVar(SplashPointsArc, "Splash points arc", 100, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0, 400, 5);
@@ -437,6 +550,7 @@ NAMESPACE_BEGIN(Vars)
 		CVar(Interp, "Fake interp", 0, SLIDER_CLAMP | SLIDER_PRECISION, 0, 1000, 5);
 		CVar(Window, VA_LIST("Window", "Backtrack window"), 185, SLIDER_CLAMP | SLIDER_PRECISION, 0, 200, 5);
 		CVar(PreferOnShot, "Prefer on shot", false);
+		CVar(PreferCrosshair, "Backtrack to crosshair", false);
 
 		CVar(Offset, "Offset", 0, NOSAVE | DEBUGVAR, -1, 1);
 	NAMESPACE_END(Backtrack)
@@ -526,6 +640,8 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(StreamerMode, "Streamer mode", 0, VISUAL, nullptr,
 				VA_LIST("Off", "Local", "Friends", "Party", "All"),
 				Off, Local, Friends, Party, All);
+			CVar(StreamerName, "Streamer name", std::string(""), NOBIND);
+			CVar(RandomNames, "Random player names", true, NOBIND);
 			CVarEnum(ChatTags, "Chat tags", 0b000, VISUAL | DROPDOWN_MULTI, nullptr,
 				VA_LIST("Local", "Friends", "Party", "Assigned"),
 				Local = 1 << 0, Friends = 1 << 1, Party = 1 << 2, Assigned = 1 << 3);
@@ -536,6 +652,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(ScoreboardUtility, "Scoreboard utility", false);
 			CVar(ScoreboardColors, "Scoreboard colors", false, VISUAL);
 			CVar(CleanScreenshots, "Clean screenshots", true);
+			CVar(DiscordRPC, "Discord RPC", true, NOBIND);
 		NAMESPACE_END(UI)
 
 		NAMESPACE_BEGIN(Thirdperson)
@@ -650,6 +767,8 @@ NAMESPACE_BEGIN(Vars)
 			CVar(SwingLines, "Swing lines", false, VISUAL);
 			CVar(PlayerDrawDuration, VA_LIST("Draw duration", "Player path draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 			CVar(ProjectileDrawDuration, VA_LIST("Draw duration", "Projectile path draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
+			CVar(SmartFlickCrosshair, "Smart flick crosshair", false, VISUAL);
+			CVar(SoftAimCrosshair, "Soft aim crosshair", false, VISUAL);
 
 			CVarValues(RealPath, "Real path", 0, NOSAVE | DEBUGVAR, nullptr,
 				"Off", "Line", "Separators", "Spaced", "Arrows", "Boxes");
@@ -744,6 +863,11 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AntiAFK, "Anti-AFK", false);
 			CVar(AutoF2Ignored, "Auto F2 ignored", false);
 			CVar(AutoF1Priority, "Auto F1 priority", false);
+			CVar(AutoVote, "Auto call vote", false);
+			CVar(AutoVoteDefensive, "Auto vote defensive", false);
+			CVarEnum(AutoVoteTargets, "Auto vote targets", 0b0111, DROPDOWN_MULTI, nullptr,
+				VA_LIST("Prioritized", "Cheaters", "Bots"),
+				Prioritized = 1 << 0, Cheaters = 1 << 1, Bots = 1 << 2);
 			CVar(AcceptItemDrops, "Auto accept item drops", false);
 		NAMESPACE_END(Automation)
 
@@ -805,6 +929,60 @@ NAMESPACE_BEGIN(Vars)
 				// Africa
 				JNB = 1 << 28, // Johannesburg
 			);
+
+			CVar(FastQueue, "Fast queue", false);
+			CVar(FastQueueMaxPing, "Fast queue max ping", 200, SLIDER_CLAMP, 1, 1000);
+			CVarEnum(FastQueueBlockEU, "Block regions (EU / Asia)", 0b0, DROPDOWN_MULTI, nullptr,
+				VA_LIST("Netherlands", "Germany", "UK", "Spain", "France", "Luxembourg", "Sweden", "Poland", "Bulgaria", "Finland", "Austria", "Italy", "##Divider", "Mumbai", "Chennai", "Dubai", "Hong Kong", "Shanghai", "Guangzhou", "Tianjin", "Tokyo", "Singapore", "Seoul"),
+				// Europe
+				Netherlands = 1 << 0, // Amsterdam (ams/ams4)
+				Germany = 1 << 1,     // Frankfurt + Falkenstein (fra/fsn)
+				UK = 1 << 2,          // London (lhr)
+				Spain = 1 << 3,       // Madrid (mad)
+				France = 1 << 4,      // Paris (par)
+				Luxembourg = 1 << 5,  // (lux/lux1/lux2)
+				Sweden = 1 << 6,      // Stockholm (sto/sto2)
+				Poland = 1 << 7,      // Warsaw (waw)
+				Bulgaria = 1 << 8,    // Sofia (sof)
+				Finland = 1 << 9,     // Helsinki (hel)
+				Austria = 1 << 10,    // Vienna (vie)
+				Italy = 1 << 11,      // Milan (mln1)
+				// Asia / Middle East
+				Mumbai = 1 << 12,   // (bom/bom2)
+				Chennai = 1 << 13,  // (maa/maa2)
+				Dubai = 1 << 14,    // (dxb)
+				HongKong = 1 << 15, // (hkg/hkg4)
+				Shanghai = 1 << 16, // (sha)
+				Guangzhou = 1 << 17,// (can)
+				Tianjin = 1 << 18,  // (tsn)
+				Tokyo = 1 << 19,    // (tyo/tyo1/tyo2)
+				Singapore = 1 << 20,// (sgp)
+				Seoul = 1 << 21,    // (seo)
+			);
+			CVarEnum(FastQueueBlockUS, "Block regions (Americas / others)", 0b0, DROPDOWN_MULTI, nullptr,
+				VA_LIST("Texas", "New York", "Atlanta", "Washington DC", "Chicago", "California", "Seattle", "Oklahoma", "New Orleans", "Virginia", "Florida", "Boston", "##Divider", "Brazil", "Peru", "Chile", "Argentina", "##Divider", "Africa", "Australia"),
+				// North America
+				Texas = 1 << 0,       // Dallas (dfw/dfw2/dfwm/msa1)
+				NewYork = 1 << 1,     // (jfk/mny1)
+				Atlanta = 1 << 2,     // (atl)
+				Washington = 1 << 3,  // DC (iad)
+				Chicago = 1 << 4,     // (ord)
+				California = 1 << 5,  // (lax)
+				Seattle = 1 << 6,     // (sea/eat)
+				Oklahoma = 1 << 7,    // (okc)
+				NewOrleans = 1 << 8,  // (msy1)
+				Virginia = 1 << 9,    // (mat1)
+				Florida = 1 << 10,    // (mmi1)
+				Boston = 1 << 11,     // (mas1)
+				// South America
+				Brazil = 1 << 12,   // Sao Paulo (gru)
+				Peru = 1 << 13,     // Lima (lim)
+				Chile = 1 << 14,    // Santiago (scl)
+				Argentina = 1 << 15,// Buenos Aires (eze)
+				// Others
+				Africa = 1 << 16,    // Johannesburg (jnb)
+				Australia = 1 << 17, // Sydney (syd)
+			);
 			CVar(ExtendQueue, "Extend queue", false);
 			CVar(AutoCasualQueue, "Auto casual queue", false);
 		NAMESPACE_END(Queueing)
@@ -813,6 +991,8 @@ NAMESPACE_BEGIN(Vars)
 			CVar(InstantRespawn, "Instant respawn", false);
 			CVar(InstantRevive, "Instant revive", false);
 			CVar(AllowInspect, "Allow inspect", false);
+			CVar(TrailMarkers, "Trail markers", false, VISUAL);
+			CVar(DormantESP, "Dormant ESP", false, VISUAL);
 		NAMESPACE_END(Sound)
 
 		NAMESPACE_BEGIN(Sound)
@@ -820,21 +1000,47 @@ NAMESPACE_BEGIN(Vars)
 				VA_LIST("Footsteps", "Noisemaker", "Frying pan", "Water"),
 				Footsteps = 1 << 0, Noisemaker = 1 << 1, FryingPan = 1 << 2, Water = 1 << 3);
 			CVar(HitsoundAlways, "Hitsound always", false);
-			CVar(RemoveDSP, "Remove DSP", false);
+CVar(RemoveDSP, "Remove DSP", false);
 			CVar(GiantWeaponSounds, "Giant weapon sounds", false);
 		NAMESPACE_END(Sound)
 	NAMESPACE_END(Misc)
 
+	NAMESPACE_BEGIN(SkinChanger)
+		CVar(Enabled, "Skin changer", false);
+
+		CVar(iVariant, "Variant", 0, DROPDOWN_MODIFIABLE);
+		CVar(iPaintKit, "Paint kit", 0, SLIDER_MIN, 0, 100000, 100);
+		CVar(flWear, "Wear", 0.f, SLIDER_PRECISION, 0.f, 1.f, 0.001f);
+		CVar(iSeed, "Seed", 0, SLIDER_MIN, 0, 999999, 100);
+
+		CVarEnum(iKillstreakTier, "Killstreak", 0, DROPDOWN_MODIFIABLE, nullptr,
+			VA_LIST("Off", "Killstreak", "Specialized", "Professional"),
+			Off, Killstreak = 1, Specialized, Professional);
+		CVarEnum(iSheen, "Sheen", 0, DROPDOWN_MODIFIABLE, nullptr,
+			VA_LIST("None", "Pumpkin", "Team Shine", "Manndarin", "Mean Green", "Singularity", "Soldier of Fortune"),
+			None = 0, Pumpkin = 1, TeamShine = 2, Manndarin = 3, MeanGreen = 4, Singularity = 5, SoldierOfFortune = 6);
+		CVarEnum(iIdleEffect, "Idle effect", 0, DROPDOWN_MODIFIABLE, nullptr,
+			VA_LIST("None", "Hot Rod", "Cerebral Discharge", "Tornado", "Flames"),
+			None = 0, HotRod = 2005, CerebralDischarge = 2006, Tornado = 2007, Flames = 2008);
+		CVarEnum(iParticle, "Unusual effect", 0, DROPDOWN_MODIFIABLE, nullptr,
+			VA_LIST("None", "Hot", "Isotope", "Cool", "Energy Orb"),
+			None = 0, Hot = 701, Isotope = 702, Cool = 703, EnergyOrb = 704);
+
+		CVar(bFestivized, "Festivized", false);
+		CVar(bAustralium, "Australium", false);
+	NAMESPACE_END(SkinChanger)
+
 	NAMESPACE_BEGIN(Logging)
-		CVarEnum(Logs, "Logs", 0b0000011, DROPDOWN_MULTI, "Off",
-			VA_LIST("Vote start", "Vote cast", "Class changes", "Damage", "Cheat detection", "Tags", "Aliases", "Resolver"),
-			VoteStart = 1 << 0, VoteCast = 1 << 1, ClassChanges = 1 << 2, Damage = 1 << 3, CheatDetection = 1 << 4, Tags = 1 << 5, Aliases = 1 << 6, Resolver = 1 << 7);
+		CVarEnum(Logs, "Logs", 0b0000011 | (1 << 8), DROPDOWN_MULTI, "Off",
+			VA_LIST("Vote start", "Vote cast", "Class changes", "Damage", "Cheat detection", "Tags", "Aliases", "Resolver", "Bans"),
+			VoteStart = 1 << 0, VoteCast = 1 << 1, ClassChanges = 1 << 2, Damage = 1 << 3, CheatDetection = 1 << 4, Tags = 1 << 5, Aliases = 1 << 6, Resolver = 1 << 7, Bans = 1 << 8);
 		Enum(LogTo, Toasts = 1 << 0, Chat = 1 << 1, Party = 1 << 2, Console = 1 << 3, Menu = 1 << 4, Debug = 1 << 5);
 		CVarEnum(NotificationPosition, "Notification position", 0, VISUAL, nullptr,
 			VA_LIST("Top left", "Top right", "Bottom left", "Bottom right"),
 			TopLeft, TopRight, BottomLeft, BottomRight);
 		CVar(NotificationTime, "Notification time", 5.f, VISUAL, 0.5f, 5.f, 0.5f);
 		CVar(MaxNotifications, "Max notifications", 10, VISUAL | SLIDER_MIN, 1, 10);
+		CVar(NotificationProgress, "Notification progress", true, VISUAL);
 
 		NAMESPACE_BEGIN(VoteStart, Logging)
 			CVarValues(LogTo, "Vote start log to", 0b000001, DROPDOWN_MULTI, nullptr,
@@ -875,16 +1081,24 @@ NAMESPACE_BEGIN(Vars)
 			CVarValues(LogTo, "Resolver log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(Resolver)
+
+		NAMESPACE_BEGIN(Bans, Logging)
+			CVarValues(LogTo, "Bans log to", 0b000001, DROPDOWN_MULTI, nullptr,
+				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
+		NAMESPACE_END(Bans)
 	NAMESPACE_END(Logging)
 
 	NAMESPACE_BEGIN(CheatDetection, Cheat Detection)
-		CVarEnum(Methods, "Detection methods", 0b0000, DROPDOWN_MULTI, nullptr,
-			VA_LIST("Invalid pitch", "Packet choking", "Aim flicking", "Duck Speed"),
-			InvalidPitch = 1 << 0, PacketChoking = 1 << 1, AimFlicking = 1 << 2, DuckSpeed = 1 << 3);
+		CVarEnum(Methods, "Detection methods", 1 << 0 | 1 << 1 | 1 << 4 | 1 << 5 | 1 << 6, DROPDOWN_MULTI, nullptr,
+			VA_LIST("Invalid pitch", "Packet choking", "Aim flicking", "Duck Speed", "Speedhack", "Tickbase abuse", "##Divider", "Ping spoofing"),
+			InvalidPitch = 1 << 0, PacketChoking = 1 << 1, AimFlicking = 1 << 2, DuckSpeed = 1 << 3, Speedhack = 1 << 4, TickbaseAbuse = 1 << 5, PingSpoofing = 1 << 6);
+		CVar(MarkAsSuspect, "Mark as suspect", true);
 		CVar(DetectionsRequired, "Detections required", 10, SLIDER_MIN, 0, 50);
 		CVar(MinChoking, "Min choking", 20, SLIDER_MIN, 4, 22);
 		CVar(MinFlick, "Min flick angle", 20.f, SLIDER_PRECISION, 10.f, 30.f); // min flick size to suspect
 		CVar(MaxNoise, "Max flick noise", 1.f, SLIDER_PRECISION, 1.f, 10.f); // max difference between angles before and after flick
+		CVar(PingThresholdHigh, VA_LIST("Ping threshold high", "Ping above this is suspicious"), 100, SLIDER_MIN, 10, 1000);
+		CVar(PingThresholdLow, VA_LIST("Ping threshold low", "Ping below this is impossible for legit"), 5, SLIDER_MIN, 1, 100);
 	NAMESPACE_END(CheatDetection)
 
 	NAMESPACE_BEGIN(Debug)
@@ -892,6 +1106,7 @@ NAMESPACE_BEGIN(Vars)
 		CVar(Logging, "Debug logging", false, NOSAVE);
 		CVar(Options, "Debug options", false, NOSAVE);
 		CVar(CrashLogging, "Crash logging", true, NOBIND);
+		CVar(SendCrashLogs, "Send crash logs", true, NOBIND);
 
 #ifdef DEBUG_TRACES
 		CVar(VisualizeTraces, "Visualize traces", false, NOSAVE);
@@ -900,4 +1115,13 @@ NAMESPACE_BEGIN(Vars)
 
 		CVar(DrawHitboxes, "Show hitboxes", false, NOSAVE);
 	NAMESPACE_END(Debug)
+
+	NAMESPACE_BEGIN(Radio)
+		CVar(Enabled, "Radio", false, VISUAL);
+		CVarEnum(Station, "Station", 0, NONE, nullptr,
+			VA_LIST("DNB", "Jungle", "Liquid dnb", "Hardcore", "Techno", "Classic rap", "Vaporwave"),
+			DNB, Jungle, LiquidDnb, Hardcore, Techno, ClassicRap, Vaporwave);
+		CVar(Volume, "Volume", 50, VISUAL | SLIDER_MIN, 0, 100);
+		CVar(ScaleToGameVolume, "Scale to game volume", false, VISUAL);
+	NAMESPACE_END(Radio)
 NAMESPACE_END(Vars)

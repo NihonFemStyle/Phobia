@@ -14,12 +14,9 @@ MAKE_HOOK(ISteamFriends_GetFriendPersonaName, U::Memory.GetVirtual(I::SteamFrien
 
 	if (dwRetAddr == dwDesired && Vars::Visuals::UI::StreamerMode.Value)
 	{
-		switch (F::PlayerUtils.GetNameType(steamIDFriend.GetAccountID()))
-		{
-		case NameTypeEnum::Local: return LOCAL;
-		case NameTypeEnum::Friend: return FRIEND;
-		case NameTypeEnum::Party: return PARTY;
-		}
+		const int iType = F::PlayerUtils.GetNameType(steamIDFriend.GetAccountID());
+		if (iType & NameTypeEnum::Privacy)
+			return F::PlayerUtils.GetPlayerName(steamIDFriend.GetAccountID(), "Player");
 	}
 
 	return CALL_ORIGINAL(rcx, steamIDFriend);

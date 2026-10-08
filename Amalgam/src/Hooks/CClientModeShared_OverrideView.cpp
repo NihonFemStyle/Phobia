@@ -1,6 +1,7 @@
 #include "../SDK/SDK.h"
 
 #include "../Features/Visuals/Visuals.h"
+#include "../Features/Misc/Misc.h"
 
 MAKE_HOOK(CClientModeShared_OverrideView, U::Memory.GetVirtual(I::ClientModeShared, 16), void,
 	void* rcx, CViewSetup* pView)

@@ -192,22 +192,30 @@ int SDK::SharedRandomInt(unsigned iSeed, const char* sName, int iMinVal, int iMa
 void SDK::RandomSeed(int iSeed)
 {
 	static auto RandomSeed = U::Memory.GetModuleExport<void(*)(uint32_t)>("vstdlib.dll", "RandomSeed");
+	if (!RandomSeed)
+		return;
 	RandomSeed(iSeed);
 }
 int SDK::RandomInt(int iMinVal, int iMaxVal)
 {
 	static auto RandomInt = U::Memory.GetModuleExport<int(*)(int, int)>("vstdlib.dll", "RandomInt");
+	if (!RandomInt)
+		return 0;
 	return RandomInt(iMinVal, iMaxVal);
 }
 float SDK::RandomFloat(float flMinVal, float flMaxVal)
 {
 	static auto RandomFloat = U::Memory.GetModuleExport<float(*)(float, float)>("vstdlib.dll", "RandomFloat");
+	if (!RandomFloat)
+		return 0.f;
 	return RandomFloat(flMinVal, flMaxVal);
 }
 
 double SDK::PlatFloatTime()
 {
 	static auto Plat_FloatTime = U::Memory.GetModuleExport<double(*)()>("tier0.dll", "Plat_FloatTime");
+	if (!Plat_FloatTime)
+		return 0.0;
 	return Plat_FloatTime();
 }
 

@@ -35,7 +35,7 @@ void CEntities::Store()
 		switch (nClassID)
 		{
 		case ETFClassID::CTFPlayerResource:
-			m_pPlayerResource = pEntity->As<CTFPlayerResource>();
+			m_iPlayerResource = n;
 			break;
 		case ETFClassID::CObjectSentrygun:
 		case ETFClassID::CObjectDispenser:
@@ -325,7 +325,7 @@ void CEntities::Clear(bool bShutdown)
 {
 	m_pLocal = nullptr;
 	m_pLocalWeapon = nullptr;
-	m_pPlayerResource = nullptr;
+	m_iPlayerResource = 0;
 	m_aGroups = {};
 
 	if (bShutdown)
@@ -503,7 +503,31 @@ CTFWeaponBase* CEntities::GetWeapon()
 }
 CTFPlayerResource* CEntities::GetResource()
 {
-	return m_pPlayerResource;
+	if (m_iPlayerResource > 0)
+	{
+		if (auto pEntity = I::ClientEntityList->GetClientEntity(m_iPlayerResource)->As<CBaseEntity>())
+		{
+			if (pEntity->GetClassID() == ETFClassID::CTFPlayerResource)
+				return pEntity->As<CTFPlayerResource>();
+		}
+	}
+
+	m_iPlayerResource = 0;
+
+	for (int n = I::EngineClient->GetMaxClients() + 1; n <= I::ClientEntityList->GetHighestEntityIndex(); n++)
+	{
+		auto pEntity = I::ClientEntityList->GetClientEntity(n)->As<CBaseEntity>();
+		if (!pEntity)
+			continue;
+
+		if (pEntity->GetClassID() == ETFClassID::CTFPlayerResource)
+		{
+			m_iPlayerResource = n;
+			return pEntity->As<CTFPlayerResource>();
+		}
+	}
+
+	return nullptr;
 }
 
 const std::vector<CBaseEntity*>& CEntities::GetGroup(uint8_t iGroup) { return m_aGroups[iGroup]; }
@@ -534,3 +558,13 @@ int CEntities::GetLevel(uint32_t uAccountID) { return m_mULevels.contains(uAccou
 int CEntities::GetParty(int iIndex) { return m_mIParty.contains(iIndex) ? m_mIParty[iIndex] : 0; }
 int CEntities::GetParty(uint32_t uAccountID) { return m_mUParty.contains(uAccountID) ? m_mUParty[uAccountID] : 0; }
 int CEntities::GetPartyCount() { return m_iPartyCount; }
+int CEntities::GetPartySize()
+{
+	int nSize = 0;
+	for (const auto& [uAccountID, uParty] : m_mUParty)
+	{
+		if (uParty == 1)
+			nSize++;
+	}
+	return nSize;
+}

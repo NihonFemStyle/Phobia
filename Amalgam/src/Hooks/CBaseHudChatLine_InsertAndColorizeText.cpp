@@ -1,5 +1,6 @@
 #include "../SDK/SDK.h"
 
+#include "../Features/ChatUtils/ChatUtils.h"
 #include "../Features/Players/PlayerUtils.h"
 
 MAKE_SIGNATURE(CBaseHudChatLine_InsertAndColorizeText, "client.dll", "44 89 44 24 ? 55 53 56 57", 0x0);
@@ -14,6 +15,7 @@ MAKE_HOOK(CBaseHudChatLine_InsertAndColorizeText, S::CBaseHudChatLine_InsertAndC
 		return CALL_ORIGINAL(rcx, buf, clientIndex);
 
 	std::string sMessage = SDK::ConvertWideToUTF8(buf);
+	F::ChatUtils.OnChatMessage(clientIndex, sMessage);
 	const char* sName = pResource->GetName(clientIndex);
 	auto iFind = sMessage.find(sName);
 

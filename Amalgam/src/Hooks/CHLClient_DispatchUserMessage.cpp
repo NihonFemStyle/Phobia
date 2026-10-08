@@ -25,8 +25,13 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 	{
 	case VoteStart:
 		F::Output.UserMessage(msgData);
-		F::AutoVote.UserMessage(msgData);
+		F::AutoVote.UserMessage(type, msgData);
 
+		break;
+	case VoteFailed:
+	case VotePass:
+	case CallVoteFailed:
+		F::AutoVote.UserMessage(type, msgData);
 		break;
 	case VoiceSubtitle:
 	{
@@ -97,8 +102,7 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 			}
 #endif
 
-			if (Vars::Misc::Automation::AntiAutobalance.Value
-				&& FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#TF_Autobalance_TeamChangePending") && !I::EngineClient->IsPlayingDemo())
+			if (Vars::Misc::Automation::AntiAutobalance.Value && FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#TF_Autobalance_TeamChangePending"))
 				I::EngineClient->ClientCmd_Unrestricted("retry");
 		}
 		break;
