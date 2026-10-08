@@ -24,19 +24,19 @@
 
   # FEATURE OVERLOAD
   Everything is in `/Phobia` now  
-  Expanded Playerlist  
+  - Expanded Playerlist  
   - TF2BD lists, Steam API, and SteamHistory API support
-  Working Radio
-  Ballistic Projectiles
-  "AstralMod" DiscordRPC  
-  Universal Music Overlay
-  Much more customizable Menu
-  Togglable Watermark
-  Splash Screen
-  Working QuickSave
-  DDonk
-  SoftAim
-  Safer Cheat Detection Defaults/Options
-  and probably alot more i cant remember  
+  - Working Radio
+  - Ballistic Projectiles
+  - "AstralMod" DiscordRPC  
+  - Universal Music Overlay
+  - Much more customizable Menu
+  - Togglable Watermark
+  - Splash Screen
+  - Working QuickSave
+  - DDonk
+  - SoftAim
+  - Safer Cheat Detection Defaults/Options
+  - and probably alot more i cant remember  
 
 </div>
