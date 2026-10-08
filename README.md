@@ -2,7 +2,7 @@
 
 # Phobia - A Hyper Advanced Fork of Amalgam
 
-  ## <img src="./logoPNG.png" alt="Amalgam" height="100">
+  ## <img src="LogoPNG.png" alt="Amalgam" height="100">
 
   [![Stars](https://img.shields.io/github/stars/NihonFemStyle/Phobia?style=for-the-badge&color=white&logo=github)](/../../stargazers)
   [![Workflow status](https://img.shields.io/github/actions/workflow/status/NihonFemStyle/Phobia/msbuild.yml?branch=master&style=for-the-badge)](/../../actions)
