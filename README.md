@@ -23,7 +23,20 @@
   <sub>If nightly.link is down or can't be accessed, you can still download through [GitHub](https://github.com/NihonFemStyle/Phobia/actions) with an account. </sub>
 
   # FEATURE OVERLOAD
-  I lost track of all the features this has  
-  Feel free to go exploring  
+  Everything is in `/Phobia` now  
+  Expanded Playerlist  
+  - TF2BD lists, Steam API, and SteamHistory API support
+  Working Radio
+  Ballistic Projectiles
+  "AstralMod" DiscordRPC  
+  Universal Music Overlay
+  Much more customizable Menu
+  Togglable Watermark
+  Splash Screen
+  Working QuickSave
+  DDonk
+  SoftAim
+  Safer Cheat Detection Defaults/Options
+  and probably alot more i cant remember  
 
 </div>
